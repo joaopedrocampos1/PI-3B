@@ -64,23 +64,66 @@ milhares de vértices a versão recursiva estoura a pilha de chamadas.
 ## Estrutura do repositório
 
 ```
-├── include/          headers públicos (graph.h define a interface comum)
-├── src/              todo o código C
+├── include/
+├── src/
 ├── data/
-│   ├── raw/          dataset original, não modificado
-│   └── samples/      subgrafos amostrados (N = 100, 250, 500, 1.000)
+│   ├── raw/
+│   └── samples/
 ├── results/
-│   ├── log.csv       uma linha por execução de algoritmo (RF03)
-│   ├── dot/          grafos exportados para visualização
-│   └── figs/         imagens renderizadas e gráficos do artigo
-├── scripts/          geração de gráficos e renderização dos .dot
-├── tests/            casos com resultado conhecido
-├── docs/             artigo no template SBC
-└── bin/              binário compilado (fora do controle de versão)
+│   ├── log.csv
+│   ├── dot/
+│   └── figs/
+├── scripts/
+├── tests/
+├── docs/
+└── bin/
 ```
 
-`src/` e `include/` são planos: o nome do arquivo já diz a que módulo ele pertence,
-sem precisar de subpastas espelhadas.
+Em uma frase: `data/` é o que entra, `src/` e `include/` são o que você escreve,
+`results/` é o que sai, e `scripts/`, `tests/` e `docs/` são o apoio para analisar,
+validar e escrever.
+
+**`include/`** — os headers (`.h`). O principal é o `graph.h`, que declara a interface
+do grafo (criar, inserir aresta, vizinhos, grau) sem dizer se por baixo é lista ou
+matriz. É isso que permite trocar a estrutura em tempo de execução (RF02), e é o que os
+algoritmos enxergam.
+
+**`src/`** — todo o código C: parser, as duas representações, os seis algoritmos,
+instrumentação e o `main.c`.
+
+**`data/raw/`** — o dataset original, **nunca editado**. Se algum arquivo processado for
+corrompido, é daqui que se recomeça.
+
+**`data/samples/`** — os subgrafos de N = 100, 250, 500 e 1.000 gerados a partir do raw.
+Ficam separados porque são derivados: podem ser apagados e regerados.
+
+**`results/log.csv`** — uma linha por execução de algoritmo, com tempo em milissegundos
+e consumo de memória (RF03). É a matéria-prima dos gráficos e a evidência experimental
+do artigo, por isso é versionado.
+
+**`results/dot/`** — os grafos exportados em formato Graphviz, para visualização.
+
+**`results/figs/`** — as imagens: os `.dot` renderizados e os gráficos de desempenho.
+É de onde as figuras saem para dentro do artigo.
+
+**`scripts/`** — Python/gnuplot para ler o `log.csv` e desenhar os gráficos, mais a
+renderização dos `.dot` em lote. Fica separado de propósito: o RNF01 proíbe biblioteca
+pronta de grafos nos algoritmos, mas não no ferramental de análise, e essa fronteira
+precisa ser visível.
+
+**`tests/`** — os grafos de resultado conhecido (linha, ciclo, estrela, desconexo,
+bipartido). São pequenos e a resposta certa é sabida de antemão, então servem para
+provar que o algoritmo está correto antes de soltá-lo sobre 1.000 vértices.
+
+**`docs/`** — o artigo no template SBC.
+
+**`bin/`** — o executável compilado. Está no `.gitignore`: binário não se versiona, cada
+um gera o seu.
+
+### Organização de `src/`
+
+`src/` e `include/` são planos — o nome do arquivo já diz a que módulo ele pertence,
+sem subpastas espelhadas.
 
 | Prefixo | Módulo | Responsável |
 |---|---|---|
