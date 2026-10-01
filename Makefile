@@ -6,8 +6,9 @@
 #   make clean
 
 CC      = gcc
+# -O2: os tempos medidos (RF03) devem refletir o algoritmo, não código sem otimização
 # -D_POSIX_C_SOURCE: com -std=c11, clock_gettime (medição de tempo) não é declarado
-CFLAGS  = -std=c11 -Wall -Wextra -pedantic -Werror -D_POSIX_C_SOURCE=199309L -Iinclude
+CFLAGS  = -std=c11 -O2 -Wall -Wextra -pedantic -Werror -D_POSIX_C_SOURCE=199309L -Iinclude
 # bibliotecas vêm depois dos .c no comando, senão o linker as descarta
 LDLIBS  = -lm
 TARGET  = bin/grafos
