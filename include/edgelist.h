@@ -43,6 +43,11 @@ typedef enum {
  * fica vazia e não precisa ser liberada. */
 EdgeListStatus edgelist_ler(const char *caminho, EdgeList *saida);
 
+/* Grava as arestas em `caminho`, uma "origem destino" por linha, no formato
+ * que edgelist_ler lê de volta. Se `comentario` não for NULL, cada linha dele
+ * vai antes das arestas, prefixada por "# ". */
+EdgeListStatus edgelist_gravar(const char *caminho, const EdgeList *el, const char *comentario);
+
 void edgelist_liberar(EdgeList *el);
 
 #endif
