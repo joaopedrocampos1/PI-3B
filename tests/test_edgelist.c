@@ -236,8 +236,87 @@ static void erro_de_leitura_e_erro(void)
     CHECK(el.arestas == NULL);
 }
 
+#define GRAVADO "bin/gravado_edgelist.txt"
+
+/* O que é gravado volta idêntico pela leitura, inclusive o maior ID possível,
+ * e o comentário de várias linhas não vira dado. */
+static void gravar_e_ler_de_volta(void)
+{
+    EdgeList orig;
+    CHECK(edgelist_ler(fixture("568770231 12\n12 13\n18446744073709551615 0\n"), &orig) ==
+          EDGELIST_OK);
+
+    CHECK(edgelist_gravar(GRAVADO, &orig, "semente: 42\nN: 100") == EDGELIST_OK);
+
+    EdgeList lido;
+    CHECK(edgelist_ler(GRAVADO, &lido) == EDGELIST_OK);
+    CHECK(lido.malformadas == 0);
+    CHECK(lido.n == orig.n);
+    int iguais = lido.n == orig.n;
+    for (size_t i = 0; iguais && i < lido.n; i++)
+        iguais = lido.arestas[i].origem == orig.arestas[i].origem &&
+                 lido.arestas[i].destino == orig.arestas[i].destino;
+    CHECK(iguais);
+
+    /* cabeçalho: cada linha do comentário prefixada por "# " */
+    char l1[64] = "", l2[64] = "";
+    FILE *f = fopen(GRAVADO, "r");
+    if (f) {
+        if (!fgets(l1, sizeof l1, f) || !fgets(l2, sizeof l2, f))
+            l1[0] = '\0';
+        fclose(f);
+    }
+    CHECK(strcmp(l1, "# semente: 42\n") == 0);
+    CHECK(strcmp(l2, "# N: 100\n") == 0);
+
+    edgelist_liberar(&lido);
+    edgelist_liberar(&orig);
+    remove(GRAVADO);
+}
+
+static void gravar_sem_comentario(void)
+{
+    EdgeList orig;
+    edgelist_ler(fixture("1 2\n"), &orig);
+    CHECK(edgelist_gravar(GRAVADO, &orig, NULL) == EDGELIST_OK);
+
+    char l1[64] = "";
+    FILE *f = fopen(GRAVADO, "r");
+    if (f) {
+        if (!fgets(l1, sizeof l1, f))
+            l1[0] = '\0';
+        fclose(f);
+    }
+    CHECK(strcmp(l1, "1 2\n") == 0);
+    edgelist_liberar(&orig);
+    remove(GRAVADO);
+}
+
+static void gravar_em_destino_invalido_e_erro(void)
+{
+    EdgeList orig;
+    edgelist_ler(fixture("1 2\n"), &orig);
+    CHECK(edgelist_gravar("bin", &orig, NULL) == EDGELIST_ERRO_ARQUIVO);   /* é um diretório */
+    edgelist_liberar(&orig);
+}
+
+/* /dev/full abre normalmente no Linux, mas toda escrita falha com "sem
+ * espaço": simula disco cheio. A falha só aparece quando o buffer é
+ * descarregado, no fclose. (Sem /dev/full, o fopen falha: mesmo erro.) */
+static void disco_cheio_e_erro(void)
+{
+    EdgeList orig;
+    edgelist_ler(fixture("1 2\n"), &orig);
+    CHECK(edgelist_gravar("/dev/full", &orig, "semente: 1") == EDGELIST_ERRO_ARQUIVO);
+    edgelist_liberar(&orig);
+}
+
 int main(void)
 {
+    disco_cheio_e_erro();
+    gravar_e_ler_de_volta();
+    gravar_sem_comentario();
+    gravar_em_destino_invalido_e_erro();
     erro_de_leitura_e_erro();
     arquivo_inexistente_e_erro();
     mesma_origem_destinos_distintos();
