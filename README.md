@@ -7,8 +7,8 @@ espalha**: quão distantes os usuários estão entre si, que parcelas da rede fi
 inalcançáveis a partir de um ponto, e quais usuários funcionam como pontes cuja
 remoção fragmenta a rede.
 
-> **Status:** Fase I em desenvolvimento. Ainda não há binário utilizável — as seções de
-> compilação e uso abaixo descrevem a interface planejada, não o que já roda.
+> **Status:** Fase I em desenvolvimento. O programa já lê o dataset e gera as amostras do
+> protocolo experimental; as estruturas de grafo e os algoritmos ainda estão sendo feitos.
 > O andamento fica no [board do projeto](https://github.com/users/joaopedrocampos1/projects/4)
 > e nas [issues](https://github.com/joaopedrocampos1/PI-3B/issues).
 
@@ -102,8 +102,11 @@ instrumentação e o `main.c`.
 **`data/raw/`** — o dataset original, **nunca editado**. Se algum arquivo processado for
 corrompido, é daqui que se recomeça.
 
-**`data/samples/`** — os subgrafos de N = 100, 250, 500 e 1.000 gerados a partir do raw.
-Ficam separados porque são derivados: podem ser apagados e regerados.
+**`data/samples/`** — os subgrafos de N = 100, 250, 500 e 1.000 gerados a partir do raw,
+um arquivo por semente e tamanho (`bfs_<semente>_n<N>.txt`). Ficam separados porque são
+derivados: podem ser apagados e regerados com `--amostrar`, que produz exatamente os
+mesmos arquivos. São versionados para que todos rodem os experimentos sobre as mesmas
+amostras.
 
 **`results/log.csv`** — uma linha por execução de algoritmo, com tempo em milissegundos
 e consumo de memória (RF03). É a matéria-prima dos gráficos e a evidência experimental
@@ -167,28 +170,48 @@ pontes destacadas.
 Requer `gcc` e `make`. Nenhuma dependência externa.
 
 ```bash
-make
+make          # compila bin/grafos
+make test     # compila e roda os testes de tests/
+make clean
 ```
 
-O projeto deve compilar sem nenhum aviso sob `-Wall -Wextra` e rodar sem vazamentos
-sob `valgrind`.
+A compilação usa `-std=c11 -Wall -Wextra -pedantic -Werror`: qualquer aviso interrompe o
+build. O código também deve rodar sem vazamentos sob `valgrind`.
+
+Um dos testes usa o dataset completo. Sem ele (veja [Dataset](#dataset)), esse teste
+aparece como pulado e os demais rodam normalmente.
 
 ## Uso
 
 ```bash
-./bin/grafos --input data/raw/twitter_combined.txt --struct lista --algo bfs --source 42
+# lê o arquivo e mostra um resumo (vértices, arestas, linhas descartadas)
+./bin/grafos --input data/raw/twitter_combined.txt
+
+# gera as 12 amostras do protocolo experimental em data/samples
+./bin/grafos --input data/raw/twitter_combined.txt --amostrar data/samples
 ```
 
-| Flag | Descrição |
+| Opção | Descrição |
 |---|---|
-| `--input` | Arquivo de entrada (edge list em CSV ou TXT) |
-| `--struct` | `lista` ou `matriz` — alternável sem recompilar (RF02) |
+| `--input` | Arquivo de entrada (edge list em CSV ou TXT). Obrigatória |
+| `--struct` | `lista` ou `matriz`, alternável sem recompilar (RF02). Padrão: `lista` |
 | `--algo` | `bfs`, `dfs`, `componentes`, `ciclos`, `bipartido`, `articulacao` |
-| `--source` | Vértice de origem, para os algoritmos que precisam de um |
+| `--source` | Vértice de origem (ID original), para os algoritmos que precisam de um |
 | `--output` | Arquivo de saída dos resultados |
+| `--amostrar` | Pasta onde gravar as amostras: 3 sementes sorteadas × N = 100, 250, 500 e 1.000 |
+| `--semente-rng` | Semente do sorteio das amostras. Padrão: `2026`, que gera os arquivos versionados |
+| `--help` | Mostra a ajuda |
 
-Toda execução acrescenta uma linha a `results/log.csv` com timestamp, dataset, N, M,
-estrutura, algoritmo, tempo em ms, memória em KB e número da repetição (RF03).
+Toda opção aceita também a forma `--opcao=valor`.
+
+Código de saída: `0` em caso de sucesso, `1` em erro (argumento inválido, arquivo
+ilegível), `2` quando o pedido não pôde ser atendido por completo — um algoritmo que
+ainda não foi implementado, ou uma amostra maior que o componente da semente.
+
+Os algoritmos de `--algo` ainda não estão ligados: o programa aceita o nome e responde
+que ele ainda não foi implementado. Quando a instrumentação (RF03) estiver pronta, toda
+execução de algoritmo vai acrescentar uma linha a `results/log.csv` com timestamp,
+dataset, N, M, estrutura, algoritmo, tempo em ms, memória em KB e número da repetição.
 
 ## Formato de entrada
 
