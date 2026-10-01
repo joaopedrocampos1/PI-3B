@@ -158,6 +158,34 @@ EdgeListStatus edgelist_ler(const char *caminho, EdgeList *saida)
     return EDGELIST_OK;
 }
 
+EdgeListStatus edgelist_gravar(const char *caminho, const EdgeList *el, const char *comentario)
+{
+    FILE *f = fopen(caminho, "w");
+    if (!f)
+        return EDGELIST_ERRO_ARQUIVO;
+
+    /* cada linha do comentário começa com "# ", senão viraria dado na leitura */
+    if (comentario) {
+        fputs("# ", f);
+        for (const char *c = comentario; *c; c++) {
+            fputc(*c, f);
+            if (*c == '\n' && c[1] != '\0')
+                fputs("# ", f);
+        }
+        if (comentario[0] == '\0' || comentario[strlen(comentario) - 1] != '\n')
+            fputc('\n', f);
+    }
+
+    for (size_t i = 0; i < el->n; i++)
+        fprintf(f, "%llu %llu\n", el->arestas[i].origem, el->arestas[i].destino);
+
+    /* erros de escrita (disco cheio, etc.) só aparecem em ferror ou no fclose */
+    int erro = ferror(f);
+    if (fclose(f) != 0 || erro)
+        return EDGELIST_ERRO_ARQUIVO;
+    return EDGELIST_OK;
+}
+
 void edgelist_liberar(EdgeList *el)
 {
     free(el->arestas);
