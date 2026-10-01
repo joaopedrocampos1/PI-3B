@@ -16,12 +16,20 @@ remoção fragmenta a rede.
 
 | Elemento | Representa |
 |---|---|
-| Vértice | Uma conta / usuário da rede |
-| Aresta | Uma relação entre duas contas (amizade, seguimento ou interação) |
+| Vértice | Um usuário do Twitter |
+| Aresta A → B | O usuário A segue o usuário B |
 
-O direcionamento das arestas depende da base escolhida e será fixado junto com o
-dataset. A Fase I trata o grafo como **não valorado**: nenhuma aresta tem peso, e o
-interesse é puramente topológico. Pesos entram só na Fase II.
+O grafo é **direcionado**, e a Fase I o trata como **não valorado**: nenhuma aresta tem
+peso, e o interesse é puramente topológico. Pesos entram só na Fase II.
+
+Como nem todo algoritmo é definido para grafos direcionados, a mesma base é lida de
+três formas:
+
+| Visão | Usada em |
+|---|---|
+| Direcionada | BFS e graus de separação, detecção de ciclos |
+| Simetrizada (A → B vira A — B) | bipartição, pontes e vértices de articulação |
+| Recíproca (só pares que se seguem mutuamente) | Clique Máxima, na Fase II |
 
 ## Perguntas que a Fase I pretende responder
 
@@ -168,7 +176,7 @@ sob `valgrind`.
 ## Uso
 
 ```bash
-./bin/grafos --input data/rede.txt --struct lista --algo bfs --source 42
+./bin/grafos --input data/raw/twitter_combined.txt --struct lista --algo bfs --source 42
 ```
 
 | Flag | Descrição |
@@ -200,11 +208,45 @@ exibição.
 
 ## Dataset
 
-Ainda não definido — a seleção está na
-[issue #4](https://github.com/joaopedrocampos1/PI-3B/issues/4). Candidatos em avaliação:
-SNAP (ego-Facebook, Twitter combined, Slashdot, Epinions) e Kaggle. Os critérios são
-mínimo de 1.000 vértices, formato aberto, licença compatível com uso acadêmico e
-origem documentada.
+**ego-Twitter**, da coleção SNAP de Stanford:
+<https://snap.stanford.edu/data/ego-Twitter.html>
+
+Cada linha `A B` significa que o usuário A **segue** o usuário B. O grafo é, portanto,
+**direcionado**. O arquivo não é versionado (44 MB descompactado). Para obtê-lo:
+
+```bash
+./scripts/baixar_dataset.sh
+```
+
+O script baixa o arquivo para `data/raw/`, confere o SHA-256 e descompacta.
+
+Números medidos no arquivo:
+
+| Medida | Valor |
+|---|---|
+| Vértices | 81.306 |
+| Arestas distintas | 1.768.135 |
+| Linhas no arquivo | 2.420.766 (652.609 duplicadas e 22 laços) |
+| Pares que se seguem mutuamente | 425.839 (48,2% das arestas são recíprocas) |
+| Arestas na versão simetrizada | 1.342.296 |
+| Maior número de seguidores | 3.383 |
+| Usuários que não seguem ninguém | 11.211 |
+| Maior ID original | 568.770.231 |
+
+Três consequências para a implementação:
+
+- **O arquivo repete arestas.** Ele é a união das redes pessoais de vários usuários, e
+  a mesma relação aparece em mais de uma delas. O leitor precisa descartar duplicatas
+  e laços, senão graus e contagens saem inflados.
+- **Os IDs não servem como índice.** Vão até 568 milhões para apenas 81 mil vértices,
+  por isso são remapeados para `0..V-1` por uma tabela hash.
+- **A matriz de adjacência não cabe no grafo completo.** São 81 mil × 81 mil células:
+  cerca de 6,6 GB a 1 byte por célula, ou 830 MB a 1 bit. A comparação lista × matriz é
+  feita nos recortes amostrados, e o limite no grafo completo é tratado como resultado
+  experimental.
+
+Fonte para citação no artigo: J. McAuley e J. Leskovec. *Learning to Discover Social
+Circles in Ego Networks*. NIPS, 2012.
 
 ## Protocolo experimental
 

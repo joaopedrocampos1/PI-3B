@@ -56,3 +56,7 @@ dkms.conf
 
 # Binário compilado
 bin/
+
+# Dataset bruto: grande demais para o git, obtido com scripts/baixar_dataset.sh
+data/raw/*
+!data/raw/.gitkeep
