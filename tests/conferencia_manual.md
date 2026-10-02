@@ -16,11 +16,11 @@ o caso correspondente nesse arquivo, usando o gabarito abaixo.
 | Algoritmo | Issue | Conferência |
 |---|---|---|
 | BFS | #14 | ✅ automatizada em `test_conferencia.c` (G1 e G2, lista e matriz) |
-| DFS iterativa | #15 | ⏳ aguardando implementação |
-| Componentes conexos | #18 | ⏳ aguardando implementação |
-| Detecção de ciclos | #19 | ⏳ aguardando implementação |
-| Bipartição | #20 | ⏳ aguardando implementação |
-| Pontes e articulação (Tarjan) | #21 | ⏳ aguardando implementação |
+| DFS iterativa | #15 | ✅ automatizada em `test_conferencia.c` (G1, lista e matriz; o gabarito não traz DFS para o G2) |
+| Componentes conexos | #18 | ✅ automatizada em `test_conferencia.c` (G1 e G2, lista e matriz) |
+| Detecção de ciclos | #19 | ✅ automatizada em `test_conferencia.c` (G1 e G2, lista e matriz) |
+| Bipartição | #20 | ✅ automatizada em `test_conferencia.c` (G1 e G2, lista e matriz) |
+| Pontes e articulação (Tarjan) | #21 | ✅ automatizada em `test_conferencia.c` (G1 e G2, lista e matriz) |
 
 ## G1: 12 vértices, 12 arestas (`conferencia_g1.txt`)
 

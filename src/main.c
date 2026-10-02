@@ -1,6 +1,9 @@
 #include "bfs.h"
+#include "bipartido.h"
 #include "cli.h"
 #include "componentes.h"
+#include "cycles.h"
+#include "dfs.h"
 #include "edgelist.h"
 #include "graph.h"
 #include "idmap.h"
@@ -8,6 +11,7 @@
 #include "memtrack.h"
 #include "separacao.h"
 #include "subgraph.h"
+#include "tarjan.h"
 #include "timer.h"
 
 #include <stdint.h>
@@ -453,6 +457,271 @@ static int executar_componentes(const EdgeList *el, const Opcoes *op)
     return codigo;
 }
 
+/* Começa a medição (RF03: o pico conta a partir daqui) e monta o grafo na
+ * visão pedida. Devolve 0 se faltar memória, já avisando. */
+static int montar_grafo(const EdgeList *el, const Opcoes *op, GraphView view, IdMap *ids,
+                        Graph **g, size_t *base)
+{
+    GraphRep rep = op->estrutura == ESTRUTURA_MATRIZ ? GRAPH_MATRIX : GRAPH_LIST;
+    idmap_iniciar(ids);
+    mt_reset_peak();
+    *base = mt_current_bytes();
+    if (graph_build(el, ids, rep, view, g) != GRAPH_OK) {
+        fprintf(stderr, "erro: memória insuficiente para montar o grafo como %s\n",
+                graph_rep_name(rep));
+        idmap_liberar(ids);
+        return 0;
+    }
+    return 1;
+}
+
+/* Mostra até `max` vértices de uma sequência, pelos IDs originais. */
+static void imprimir_vertices(const IdMap *ids, const size_t *v, size_t k, size_t max,
+                              const char *sep)
+{
+    for (size_t i = 0; i < k && i < max; i++)
+        printf("%s%llu", i ? sep : "", idmap_original(ids, v[i]));
+    if (k > max)
+        printf("%s... (%zu no total)", sep, k);
+}
+
+/* --algo dfs (#15): floresta da DFS na visão direcionada. A primeira árvore
+ * parte de --source (ou do primeiro vértice do arquivo, sem --source). Com
+ * --output, grava os tempos de descoberta e finalização de cada vértice. */
+static int executar_dfs(const EdgeList *el, const Opcoes *op)
+{
+    IdMap ids;
+    Graph *g;
+    size_t base;
+    if (!montar_grafo(el, op, GRAPH_DIRECTED, &ids, &g, &base))
+        return 1;
+
+    int codigo = 1;
+    size_t origem = 0;
+    if (op->tem_origem && !idmap_buscar(&ids, op->origem, &origem)) {
+        fprintf(stderr, "erro: o vértice %llu não existe no grafo\n", op->origem);
+        goto fim;
+    }
+    Timer *cron = timer_criar();
+    if (!cron) {
+        fprintf(stderr, "erro: memória insuficiente para o cronômetro\n");
+        goto fim;
+    }
+    DfsResultado r;
+    timer_iniciar(cron);
+    DfsStatus st = dfs_executar(g, origem, &r);
+    double ms = timer_parar_ms(cron);
+    size_t pico = mt_peak_bytes();
+    timer_destruir(cron);
+    if (st != DFS_OK) {
+        fprintf(stderr, "erro: %s\n", st == DFS_ERRO_ORIGEM ? "o grafo não tem vértices"
+                                                            : "memória insuficiente para a DFS");
+        goto fim;
+    }
+
+    size_t n = graph_num_vertices(g);
+    printf("DFS a partir de %llu (%s, visão direcionada)\n", idmap_original(&ids, origem),
+           graph_rep_name(graph_rep(g)));
+    printf("  alcançados a partir da origem: %zu de %zu vértices (%.2f%%)\n", r.alcancados, n,
+           100.0 * (double)r.alcancados / (double)n);
+    printf("  árvores na floresta da DFS: %zu\n", r.arvores);
+
+    codigo = registrar(op, g, "dfs", ms, pico, base) ? 0 : 1;
+    if (op->saida) {
+        FILE *f = fopen(op->saida, "w");
+        if (!f) {
+            fprintf(stderr, "erro: não foi possível gravar '%s'\n", op->saida);
+            codigo = 1;
+        } else {
+            fprintf(f, "vertice,descoberta,finalizacao\n");
+            for (size_t v = 0; v < n; v++)
+                fprintf(f, "%llu,%zu,%zu\n", idmap_original(&ids, v), r.descoberta[v],
+                        r.finalizacao[v]);
+            fclose(f);
+        }
+    }
+    dfs_liberar(&r);
+fim:
+    graph_destroy(g);
+    idmap_liberar(&ids);
+    return codigo;
+}
+
+/* --algo ciclos (#19): classificação das arestas e um ciclo de exemplo, na
+ * visão direcionada. Com --output, grava o ciclo de exemplo, um vértice por
+ * linha, na ordem dos repasses. */
+static int executar_ciclos(const EdgeList *el, const Opcoes *op)
+{
+    IdMap ids;
+    Graph *g;
+    size_t base;
+    if (!montar_grafo(el, op, GRAPH_DIRECTED, &ids, &g, &base))
+        return 1;
+
+    int codigo = 1;
+    Timer *cron = timer_criar();
+    if (!cron) {
+        fprintf(stderr, "erro: memória insuficiente para o cronômetro\n");
+        goto fim;
+    }
+    CiclosResultado r;
+    timer_iniciar(cron);
+    CiclosStatus st = ciclos_executar(g, &r);
+    double ms = timer_parar_ms(cron);
+    size_t pico = mt_peak_bytes();
+    timer_destruir(cron);
+    if (st != CICLOS_OK) {
+        fprintf(stderr, "erro: memória insuficiente para a detecção de ciclos\n");
+        goto fim;
+    }
+
+    printf("Detecção de ciclos (%s, visão direcionada)\n", graph_rep_name(graph_rep(g)));
+    printf("  tem ciclo: %s\n", r.tem_ciclo ? "sim" : "não");
+    printf("  arestas: %zu de árvore, %zu de retorno, %zu de avanço, %zu cruzadas\n", r.arvore,
+           r.retorno, r.avanco, r.cruzada);
+    if (r.tem_ciclo) {
+        printf("  exemplo (%zu vértices): ", r.tam_ciclo);
+        imprimir_vertices(&ids, r.ciclo, r.tam_ciclo, 12, " -> ");
+        printf(" -> %llu\n", idmap_original(&ids, r.ciclo[0]));
+    }
+
+    codigo = registrar(op, g, "ciclos", ms, pico, base) ? 0 : 1;
+    if (op->saida) {
+        FILE *f = fopen(op->saida, "w");
+        if (!f) {
+            fprintf(stderr, "erro: não foi possível gravar '%s'\n", op->saida);
+            codigo = 1;
+        } else {
+            fprintf(f, "posicao,vertice\n");
+            for (size_t i = 0; i < r.tam_ciclo; i++)
+                fprintf(f, "%zu,%llu\n", i, idmap_original(&ids, r.ciclo[i]));
+            fclose(f);
+        }
+    }
+    ciclos_liberar(&r);
+fim:
+    graph_destroy(g);
+    idmap_liberar(&ids);
+    return codigo;
+}
+
+/* --algo bipartido (#20): verificação de bipartição na visão simetrizada. Com
+ * --output, grava a cor de cada vértice. */
+static int executar_bipartido(const EdgeList *el, const Opcoes *op)
+{
+    IdMap ids;
+    Graph *g;
+    size_t base;
+    if (!montar_grafo(el, op, GRAPH_SYMMETRIC, &ids, &g, &base))
+        return 1;
+
+    int codigo = 1;
+    Timer *cron = timer_criar();
+    if (!cron) {
+        fprintf(stderr, "erro: memória insuficiente para o cronômetro\n");
+        goto fim;
+    }
+    BipartidoResultado r;
+    timer_iniciar(cron);
+    BipartidoStatus st = bipartido_executar(g, &r);
+    double ms = timer_parar_ms(cron);
+    size_t pico = mt_peak_bytes();
+    timer_destruir(cron);
+    if (st != BIPARTIDO_OK) {
+        fprintf(stderr, "erro: memória insuficiente para a verificação de bipartição\n");
+        goto fim;
+    }
+
+    printf("Bipartição (%s, visão simetrizada)\n", graph_rep_name(graph_rep(g)));
+    printf("  bipartido: %s\n", r.bipartido ? "sim" : "não");
+    if (r.bipartido) {
+        printf("  lados: %zu e %zu vértices\n", r.lado[0], r.lado[1]);
+    } else {
+        printf("  ciclo ímpar (%zu vértices): ", r.tam_ciclo);
+        imprimir_vertices(&ids, r.ciclo_impar, r.tam_ciclo, 12, " - ");
+        printf(" - %llu\n", idmap_original(&ids, r.ciclo_impar[0]));
+    }
+
+    codigo = registrar(op, g, "bipartido", ms, pico, base) ? 0 : 1;
+    if (op->saida) {
+        FILE *f = fopen(op->saida, "w");
+        if (!f) {
+            fprintf(stderr, "erro: não foi possível gravar '%s'\n", op->saida);
+            codigo = 1;
+        } else {
+            fprintf(f, "vertice,cor\n");
+            for (size_t v = 0; v < r.n; v++)
+                fprintf(f, "%llu,%u\n", idmap_original(&ids, v), (unsigned)r.cor[v]);
+            fclose(f);
+        }
+    }
+    bipartido_liberar(&r);
+fim:
+    graph_destroy(g);
+    idmap_liberar(&ids);
+    return codigo;
+}
+
+/* --algo articulacao (#21): pontes e vértices de articulação na visão
+ * simetrizada, com o ranking por impacto de fragmentação. Com --output, grava
+ * todas as articulações, da de maior impacto para a de menor. */
+static int executar_articulacao(const EdgeList *el, const Opcoes *op)
+{
+    IdMap ids;
+    Graph *g;
+    size_t base;
+    if (!montar_grafo(el, op, GRAPH_SYMMETRIC, &ids, &g, &base))
+        return 1;
+
+    int codigo = 1;
+    Timer *cron = timer_criar();
+    if (!cron) {
+        fprintf(stderr, "erro: memória insuficiente para o cronômetro\n");
+        goto fim;
+    }
+    TarjanResultado r;
+    timer_iniciar(cron);
+    TarjanStatus st = tarjan_executar(g, &r);
+    double ms = timer_parar_ms(cron);
+    size_t pico = mt_peak_bytes();
+    timer_destruir(cron);
+    if (st != TARJAN_OK) {
+        fprintf(stderr, "erro: memória insuficiente para o Tarjan\n");
+        goto fim;
+    }
+
+    printf("Pontes e vértices de articulação (%s, visão simetrizada)\n",
+           graph_rep_name(graph_rep(g)));
+    printf("  pontes: %zu\n", r.num_pontes);
+    printf("  vértices de articulação: %zu\n", r.num_articulacoes);
+    if (r.num_articulacoes)
+        printf("  maior impacto (vértices isolados do maior pedaço sem ele):\n");
+    for (size_t i = 0; i < r.num_articulacoes && i < 10; i++)
+        printf("    %2zu. %llu: %zu vértices, em %zu pedaços\n", i + 1,
+               idmap_original(&ids, r.articulacoes[i].v), r.articulacoes[i].impacto,
+               r.articulacoes[i].pedacos);
+
+    codigo = registrar(op, g, "articulacao", ms, pico, base) ? 0 : 1;
+    if (op->saida) {
+        FILE *f = fopen(op->saida, "w");
+        if (!f) {
+            fprintf(stderr, "erro: não foi possível gravar '%s'\n", op->saida);
+            codigo = 1;
+        } else {
+            fprintf(f, "vertice,impacto,pedacos\n");
+            for (size_t i = 0; i < r.num_articulacoes; i++)
+                fprintf(f, "%llu,%zu,%zu\n", idmap_original(&ids, r.articulacoes[i].v),
+                        r.articulacoes[i].impacto, r.articulacoes[i].pedacos);
+            fclose(f);
+        }
+    }
+    tarjan_liberar(&r);
+fim:
+    graph_destroy(g);
+    idmap_liberar(&ids);
+    return codigo;
+}
+
 int main(int argc, char **argv)
 {
     Opcoes op;
@@ -495,6 +764,14 @@ int main(int argc, char **argv)
         codigo = executar_separacao(&el, &op);
     } else if (op.algoritmo == ALGO_COMPONENTES) {
         codigo = executar_componentes(&el, &op);
+    } else if (op.algoritmo == ALGO_DFS) {
+        codigo = executar_dfs(&el, &op);
+    } else if (op.algoritmo == ALGO_CICLOS) {
+        codigo = executar_ciclos(&el, &op);
+    } else if (op.algoritmo == ALGO_BIPARTIDO) {
+        codigo = executar_bipartido(&el, &op);
+    } else if (op.algoritmo == ALGO_ARTICULACAO) {
+        codigo = executar_articulacao(&el, &op);
     } else if (op.algoritmo != ALGO_NENHUM) {
         fprintf(stderr, "o algoritmo '%s' ainda não foi implementado\n",
                 cli_nome_algoritmo(op.algoritmo));

@@ -8,9 +8,9 @@ inalcançáveis a partir de um ponto, e quais usuários funcionam como pontes cu
 remoção fragmenta a rede.
 
 > **Status:** Fase I em desenvolvimento. O programa lê o dataset, gera as amostras do
-> protocolo experimental, monta o grafo como lista ou matriz e executa BFS, graus de
-> separação e componentes conexos, registrando tempo e memória de cada execução.
-> DFS, ciclos, bipartição e articulação ainda não estão ligados à linha de comando.
+> protocolo experimental, monta o grafo como lista ou matriz e executa os seis algoritmos
+> da Fase I (BFS, DFS, componentes conexos, ciclos, bipartição, pontes e articulação),
+> além dos graus de separação, registrando tempo e memória de cada execução.
 > O andamento fica no [board do projeto](https://github.com/users/joaopedrocampos1/projects/4)
 > e nas [issues](https://github.com/joaopedrocampos1/PI-3B/issues).
 
@@ -143,7 +143,7 @@ sem subpastas espelhadas.
 | `edgelist.c` `idmap.c` | leitura da edge list e remapeamento de IDs | DEV1 |
 | `subgraph.c` | amostragem para o protocolo experimental | DEV1 |
 | `graph.c` `graph_list.c` `graph_matrix.c` | as duas representações e o despacho entre elas | DEV2 |
-| `bfs.c` `separacao.c` `componentes.c` | buscas em largura, graus de separação e conectividade | DEV3 |
+| `bfs.c` `separacao.c` `componentes.c` `bipartido.c` | buscas em largura, graus de separação, conectividade e bipartição | DEV3 |
 | `dfs.c` `cycles.c` `tarjan.c` | busca em profundidade e algoritmos estruturais | DEV4 |
 | `timer.c` `memtrack.c` `logger.c` | instrumentação de tempo, memória e log | DEV4 |
 | `cli.c` `main.c` | linha de comando e ligação dos módulos | — |
@@ -247,7 +247,7 @@ aparece como pulado e os demais rodam normalmente.
 |---|---|
 | `--input` | Arquivo de entrada (edge list em CSV ou TXT). Obrigatória |
 | `--struct` | `lista` ou `matriz`, alternável sem recompilar (RF02). Padrão: `lista` |
-| `--algo` | `bfs`, `separacao`, `componentes` (ligados); `dfs`, `ciclos`, `bipartido`, `articulacao` (ainda não) |
+| `--algo` | `bfs`, `dfs`, `componentes`, `ciclos`, `bipartido`, `articulacao`, `separacao` |
 | `--source` | Vértice de origem (ID original), para os algoritmos que precisam de um |
 | `--output` | Arquivo de saída dos resultados |
 | `--amostrar` | Pasta onde gravar as amostras: 3 sementes sorteadas × N = 100, 250, 500 e 1.000 |
@@ -259,8 +259,8 @@ aparece como pulado e os demais rodam normalmente.
 Toda opção aceita também a forma `--opcao=valor`.
 
 Código de saída: `0` em caso de sucesso, `1` em erro (argumento inválido, arquivo
-ilegível), `2` quando o pedido não pôde ser atendido por completo — um algoritmo que
-ainda não foi implementado, ou uma amostra maior que o componente da semente.
+ilegível, vértice de origem inexistente), `2` quando o pedido não pôde ser atendido
+por completo — uma amostra maior que o componente da semente.
 
 ```bash
 # BFS a partir do usuário 307642294: alcance, excentricidade, distância média e
@@ -276,9 +276,27 @@ ainda não foi implementado, ou uma amostra maior que o componente da semente.
 ./bin/grafos --input data/raw/twitter_combined.txt --algo separacao --output results/separacao
 ```
 
-O BFS percorre a visão direcionada, no sentido das arestas. Os demais algoritmos de
-`--algo` ainda não estão ligados: o programa aceita o nome e responde que ele ainda não
-foi implementado.
+```bash
+# pontes e vértices de articulação, com o ranking por impacto de fragmentação: quantos
+# usuários perdem contato com o maior pedaço da rede sem cada articulação
+./bin/grafos --input data/raw/twitter_combined.txt --algo articulacao --output results/articulacao.csv
+```
+
+Cada algoritmo roda sobre a visão do grafo definida para ele:
+
+| `--algo` | Visão | Origem | O que mostra |
+|---|---|---|---|
+| `bfs` | direcionada | `--source` (obrigatória) | alcance, excentricidade, distância média, histograma |
+| `dfs` | direcionada | `--source` (ou o primeiro vértice) | floresta da DFS: árvores e alcance da origem |
+| `componentes` | direcionada e simetrizada | — | componentes fortemente e fracamente conexos |
+| `ciclos` | direcionada | — | se há ciclo, um exemplo e a classificação das arestas |
+| `bipartido` | simetrizada | — | se é bipartido; se não, um ciclo ímpar |
+| `articulacao` | simetrizada | — | pontes e vértices de articulação, por impacto |
+| `separacao` | direcionada | — | graus de separação entre perfis comuns e influenciadores |
+
+Os algoritmos estruturais (DFS, ciclos, bipartição e articulação) percorrem o grafo
+inteiro, sem parar no primeiro resultado, para que o custo seja O(V + E) em qualquer
+instância, como o protocolo experimental mede.
 
 Toda execução de `--algo` acrescenta uma linha a `results/log.csv` (RF03), com as
 colunas `timestamp, dataset, N, M, estrutura, algoritmo, tempo_ms, memoria_kb,
@@ -320,6 +338,10 @@ Os resultados vão para a saída padrão. Erros e avisos vão para a saída de e
 | `results/log.csv` (ou `--log`) | toda execução de `--algo` | `timestamp,dataset,N,M,estrutura,algoritmo,tempo_ms,memoria_kb,execucao_num` |
 | `--output` | `bfs` | `distancia,vertices`: quantos vértices estão a cada distância da origem |
 | `--output` | `componentes` | `tipo,tamanho,componentes`: `tipo` é `fortes` ou `fracos` |
+| `--output` | `dfs` | `vertice,descoberta,finalizacao`: tempos de cada vértice, de 1 a 2V |
+| `--output` | `ciclos` | `posicao,vertice`: o ciclo de exemplo, na ordem dos repasses |
+| `--output` | `bipartido` | `vertice,cor`: a cor (0 ou 1) de cada vértice |
+| `--output` | `articulacao` | `vertice,impacto,pedacos`: as articulações, da de maior impacto para a de menor |
 | `<prefixo>_histograma.csv` | `separacao` com `--output <prefixo>` | `saltos,pares_rede,perfis_influenciador` |
 | `<prefixo>_perfis.csv` | `separacao` com `--output <prefixo>` | `perfil,alcancados,excentricidade,dist_media,dist_influenciador_mais_proximo,influenciadores_alcancados,dist_media_influenciadores` |
 | `<pasta>/bfs_<semente>_n<N>.txt` | `--amostrar <pasta>` | edge list no formato de entrada, com cabeçalho de comentários |

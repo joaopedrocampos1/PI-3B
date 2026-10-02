@@ -2,17 +2,22 @@
  * Conferência manual automatizada (#13): os grafos desenhados à mão de
  * tests/grafos/, conferidos contra o gabarito de tests/conferencia_manual.md.
  *
- * Cada algoritmo da Fase I ganha aqui o seu caso quando for implementado.
- * Por enquanto: BFS (#14).
+ * Cada algoritmo da Fase I ganha aqui o seu caso: BFS (#14), DFS (#15),
+ * componentes (#18), ciclos (#19), bipartição (#20) e Tarjan (#21).
  *
  * Compilar e rodar a partir da raiz do repositório:
  *   make bin/test_conferencia && ./bin/test_conferencia
  */
 #include "bfs.h"
+#include "bipartido.h"
+#include "componentes.h"
+#include "cycles.h"
+#include "dfs.h"
 #include "edgelist.h"
 #include "graph.h"
 #include "idmap.h"
 #include "memtrack.h"
+#include "tarjan.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -158,11 +163,153 @@ static void bfs_g2(GraphRep rep)
     descarregar(&s);
 }
 
+/* DFS, visão direcionada, a partir de 0: com vizinhos em ordem crescente, a
+ * ordem de descoberta é 0, 1, ..., 8; 9, 10 e 11 não são alcançados. */
+static void dfs_g1(GraphRep rep)
+{
+    Carregado d = carregar(G1, rep, GRAPH_DIRECTED);
+    DfsResultado r;
+    CHECK(dfs_executar(d.g, idx(&d, 0), &r) == DFS_OK);
+    int ordem = 1;
+    for (unsigned long long id = 0; id < 9; id++)
+        ordem &= r.descoberta[idx(&d, id)] == id + 1;
+    CHECK(ordem);
+    CHECK(r.alcancados == 9);
+    dfs_liberar(&r);
+    descarregar(&d);
+}
+
+/* Componentes, visão simetrizada: G1 tem {0..8} e {9, 10, 11}; G2 é um só. */
+static void componentes_g1_g2(GraphRep rep)
+{
+    Carregado s = carregar(G1, rep, GRAPH_SYMMETRIC);
+    ComponentesResultado r;
+    CHECK(componentes_executar(s.g, &r) == COMPONENTES_OK);
+    CHECK(r.num_componentes == 2 && r.tamanho_gigante == 9);
+    int juntos = 1;
+    for (unsigned long long id = 1; id < 9; id++)
+        juntos &= r.componente[idx(&s, id)] == r.componente[idx(&s, 0)];
+    juntos &= r.componente[idx(&s, 10)] == r.componente[idx(&s, 9)] &&
+              r.componente[idx(&s, 11)] == r.componente[idx(&s, 9)];
+    CHECK(juntos && r.componente[idx(&s, 0)] != r.componente[idx(&s, 9)]);
+    componentes_liberar(&r);
+    descarregar(&s);
+
+    s = carregar(G2, rep, GRAPH_SYMMETRIC);
+    CHECK(componentes_executar(s.g, &r) == COMPONENTES_OK);
+    CHECK(r.num_componentes == 1 && r.tamanho_gigante == 5);
+    componentes_liberar(&r);
+    descarregar(&s);
+}
+
+/* O ciclo de exemplo tem exatamente os vértices do gabarito (IDs). */
+static int ciclo_tem(const Carregado *c, const CiclosResultado *r, const unsigned long long *ids,
+                     size_t k)
+{
+    if (r->tam_ciclo != k)
+        return 0;
+    for (size_t i = 0; i < k; i++) {
+        int achou = 0;
+        for (size_t j = 0; j < k; j++)
+            achou |= r->ciclo[j] == idx(c, ids[i]);
+        if (!achou)
+            return 0;
+    }
+    return 1;
+}
+
+/* Ciclos, visão direcionada. G1: retornos 2 -> 0 e 5 -> 3, e o primeiro
+ * fecha 0 -> 1 -> 2. G2: o ciclo 0 -> 1 -> 2 -> 3 -> 0, retorno 3 -> 0. */
+static void ciclos_g1_g2(GraphRep rep)
+{
+    Carregado d = carregar(G1, rep, GRAPH_DIRECTED);
+    CiclosResultado r;
+    CHECK(ciclos_executar(d.g, &r) == CICLOS_OK);
+    const unsigned long long tri[] = {0, 1, 2};
+    CHECK(r.tem_ciclo && r.retorno == 2 && ciclo_tem(&d, &r, tri, 3));
+    ciclos_liberar(&r);
+    descarregar(&d);
+
+    d = carregar(G2, rep, GRAPH_DIRECTED);
+    CHECK(ciclos_executar(d.g, &r) == CICLOS_OK);
+    const unsigned long long quad[] = {0, 1, 2, 3};
+    CHECK(r.tem_ciclo && r.retorno == 1 && ciclo_tem(&d, &r, quad, 4));
+    ciclos_liberar(&r);
+    descarregar(&d);
+}
+
+/* Bipartição, visão simetrizada. G1 não é bipartido (triângulos 0-1-2 e
+ * 3-4-5); G2 é, com lados {0, 2, 4} e {1, 3}. */
+static void bipartido_g1_g2(GraphRep rep)
+{
+    Carregado s = carregar(G1, rep, GRAPH_SYMMETRIC);
+    BipartidoResultado r;
+    CHECK(bipartido_executar(s.g, &r) == BIPARTIDO_OK);
+    CHECK(!r.bipartido && r.tam_ciclo == 3);
+    bipartido_liberar(&r);
+    descarregar(&s);
+
+    s = carregar(G2, rep, GRAPH_SYMMETRIC);
+    CHECK(bipartido_executar(s.g, &r) == BIPARTIDO_OK);
+    unsigned char c0 = r.cor[idx(&s, 0)];
+    CHECK(r.bipartido);
+    CHECK(r.cor[idx(&s, 2)] == c0 && r.cor[idx(&s, 4)] == c0);
+    CHECK(r.cor[idx(&s, 1)] != c0 && r.cor[idx(&s, 3)] != c0);
+    bipartido_liberar(&r);
+    descarregar(&s);
+}
+
+static int ponte_ids(const Carregado *c, const TarjanResultado *r, unsigned long long a,
+                     unsigned long long b)
+{
+    size_t u = idx(c, a), v = idx(c, b);
+    if (u > v) {
+        size_t t = u;
+        u = v;
+        v = t;
+    }
+    for (size_t i = 0; i < r->num_pontes; i++)
+        if (r->pontes[i].u == u && r->pontes[i].v == v)
+            return 1;
+    return 0;
+}
+
+/* Tarjan, visão simetrizada. G1: pontes {2,3}, {5,6}, {6,7}, {7,8}, {9,10},
+ * {10,11}; articulações 2, 3, 5, 6, 7, 10. G2: ponte {3, 4}; articulação 3. */
+static void tarjan_g1_g2(GraphRep rep)
+{
+    Carregado s = carregar(G1, rep, GRAPH_SYMMETRIC);
+    TarjanResultado r;
+    CHECK(tarjan_executar(s.g, &r) == TARJAN_OK);
+    CHECK(r.num_pontes == 6);
+    CHECK(ponte_ids(&s, &r, 2, 3) && ponte_ids(&s, &r, 5, 6) && ponte_ids(&s, &r, 6, 7));
+    CHECK(ponte_ids(&s, &r, 7, 8) && ponte_ids(&s, &r, 9, 10) && ponte_ids(&s, &r, 10, 11));
+    const unsigned long long art[] = {2, 3, 5, 6, 7, 10};
+    int marcadas = r.num_articulacoes == 6;
+    for (size_t i = 0; i < 6; i++)
+        marcadas &= r.eh_articulacao[idx(&s, art[i])];
+    CHECK(marcadas);
+    tarjan_liberar(&r);
+    descarregar(&s);
+
+    s = carregar(G2, rep, GRAPH_SYMMETRIC);
+    CHECK(tarjan_executar(s.g, &r) == TARJAN_OK);
+    CHECK(r.num_pontes == 1 && ponte_ids(&s, &r, 3, 4));
+    CHECK(r.num_articulacoes == 1 && r.eh_articulacao[idx(&s, 3)]);
+    tarjan_liberar(&r);
+    descarregar(&s);
+}
+
 int main(void)
 {
     for (int rep = GRAPH_LIST; rep <= GRAPH_MATRIX; rep++) {
         bfs_g1((GraphRep)rep);
         bfs_g2((GraphRep)rep);
+        dfs_g1((GraphRep)rep);
+        componentes_g1_g2((GraphRep)rep);
+        ciclos_g1_g2((GraphRep)rep);
+        bipartido_g1_g2((GraphRep)rep);
+        tarjan_g1_g2((GraphRep)rep);
     }
 
     CHECK(mt_current_bytes() == 0);
