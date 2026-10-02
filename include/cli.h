@@ -38,6 +38,7 @@ typedef struct {
     unsigned long long semente_rng;   /* --semente-rng; padrão: CLI_SEMENTE_RNG_PADRAO */
     unsigned execucao;                /* --execucao: número desta execução no log; padrão: 1 */
     const char *log;                  /* --log: CSV das medições; padrão: LOG_CAMINHO_PADRAO */
+    const char *dot;                  /* --dot: arquivo .dot com o grafo e o resultado; NULL se ausente */
 } Opcoes;
 
 #define CLI_SEMENTE_RNG_PADRAO 2026ULL
