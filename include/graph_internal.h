@@ -39,5 +39,6 @@ struct Graph {
 };
 
 extern const GraphOps GRAPH_LIST_OPS;     /* graph_list.c   (#10) */
+extern const GraphOps GRAPH_MATRIX_OPS;   /* graph_matrix.c (#11) */
 
 #endif

@@ -3,11 +3,8 @@
 
 #include <stdlib.h>
 
-/* Declaração das tabelas de operações fornecidas por cada módulo */
-extern const GraphOps GRAPH_LIST_OPS;     /* implementado em graph_list.c */
-extern const GraphOps GRAPH_MATRIX_OPS;   /* será implementado em graph_matrix.c (#11) */
-
-/* Representações disponíveis, indexadas por GraphRep. */
+/* Representações disponíveis, indexadas por GraphRep. As tabelas de operações
+ * são declaradas em graph_internal.h. */
 static const GraphOps *const REPRESENTACOES[] = {
     [GRAPH_LIST] = &GRAPH_LIST_OPS,
     [GRAPH_MATRIX] = &GRAPH_MATRIX_OPS,

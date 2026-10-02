@@ -1,8 +1,13 @@
+#include "bfs.h"
 #include "cli.h"
 #include "edgelist.h"
+#include "graph.h"
 #include "idmap.h"
+#include "memtrack.h"
+#include "separacao.h"
 #include "subgraph.h"
 
+#include <stdint.h>
 #include <stdio.h>
 
 /* Protocolo experimental: 3 sementes x 4 tamanhos de amostra. */
@@ -99,6 +104,194 @@ static int gerar_amostras(const EdgeList *el, const Opcoes *op)
     return codigo;
 }
 
+/* Quantos vértices estão a cada distância da origem. `hist` tem dist_max + 1
+ * posições. */
+static void histograma(const BfsResultado *r, size_t *hist)
+{
+    for (size_t d = 0; d <= r->dist_max; d++)
+        hist[d] = 0;
+    for (size_t v = 0; v < r->n; v++)
+        if (r->visitado[v])
+            hist[r->dist[v]]++;
+}
+
+/* --algo bfs: BFS na visão direcionada a partir de --source. Mostra o alcance
+ * e, com --output, grava o histograma de distâncias em CSV. Devolve o código
+ * de saída do programa. */
+static int executar_bfs(const EdgeList *el, const Opcoes *op)
+{
+    if (!op->tem_origem) {
+        fprintf(stderr, "erro: --algo bfs precisa de --source <id>\n");
+        return 1;
+    }
+    GraphRep rep = op->estrutura == ESTRUTURA_MATRIZ ? GRAPH_MATRIX : GRAPH_LIST;
+    IdMap ids;
+    idmap_iniciar(&ids);
+    Graph *g;
+    if (graph_build(el, &ids, rep, GRAPH_DIRECTED, &g) != GRAPH_OK) {
+        fprintf(stderr, "erro: memória insuficiente para montar o grafo como %s\n",
+                graph_rep_name(rep));
+        idmap_liberar(&ids);
+        return 1;
+    }
+
+    int codigo = 1;
+    size_t origem;
+    BfsResultado r;
+    size_t *hist = NULL;
+    if (!idmap_buscar(&ids, op->origem, &origem)) {
+        fprintf(stderr, "erro: o vértice %llu não existe no grafo\n", op->origem);
+        goto fim;
+    }
+    if (bfs_executar(g, origem, &r) != BFS_OK) {
+        fprintf(stderr, "erro: memória insuficiente para o BFS\n");
+        goto fim;
+    }
+    hist = mt_malloc((r.dist_max + 1) * sizeof *hist);
+    if (!hist) {
+        fprintf(stderr, "erro: memória insuficiente para o histograma\n");
+        bfs_liberar(&r);
+        goto fim;
+    }
+    histograma(&r, hist);
+
+    size_t n = graph_num_vertices(g);
+    printf("BFS a partir de %llu (%s, visão direcionada)\n", op->origem, graph_rep_name(rep));
+    printf("  alcançados: %zu de %zu vértices (%.2f%%)\n", r.alcancados, n,
+           100.0 * (double)r.alcancados / (double)n);
+    printf("  excentricidade: %zu\n", r.dist_max);
+    printf("  distância média: %.4f\n", r.dist_media);
+    for (size_t d = 1; d <= r.dist_max; d++)
+        printf("  %zu salto(s): %zu vértices\n", d, hist[d]);
+
+    codigo = 0;
+    if (op->saida) {
+        FILE *f = fopen(op->saida, "w");
+        if (!f) {
+            fprintf(stderr, "erro: não foi possível gravar '%s'\n", op->saida);
+            codigo = 1;
+        } else {
+            fprintf(f, "distancia,vertices\n");
+            for (size_t d = 0; d <= r.dist_max; d++)
+                fprintf(f, "%zu,%zu\n", d, hist[d]);
+            fclose(f);
+        }
+    }
+    mt_free(hist);
+    bfs_liberar(&r);
+fim:
+    graph_destroy(g);
+    idmap_liberar(&ids);
+    return codigo;
+}
+
+/* Até este tamanho, --algo separacao também calcula diâmetro e distância média
+ * exatos (BFS de todos os vértices). Cobre todas as amostras de data/samples. */
+#define SEPARACAO_LIMITE_EXATO 5000
+
+/* Grava <prefixo>_histograma.csv e <prefixo>_perfis.csv. */
+static int gravar_separacao(const char *prefixo, const SeparacaoResultado *r, const IdMap *ids)
+{
+    char caminho[1024];
+    int c = snprintf(caminho, sizeof caminho, "%s_histograma.csv", prefixo);
+    FILE *f = (c > 0 && (size_t)c < sizeof caminho) ? fopen(caminho, "w") : NULL;
+    if (!f) {
+        fprintf(stderr, "erro: não foi possível gravar '%s'\n", caminho);
+        return 0;
+    }
+    /* pares_rede: pares (perfil, vértice alcançado) a essa distância;
+     * perfis_influenciador: perfis cujo influenciador mais próximo está a essa distância */
+    fprintf(f, "saltos,pares_rede,perfis_influenciador\n");
+    for (size_t d = 1; d <= r->diametro_estimado; d++)
+        fprintf(f, "%zu,%zu,%zu\n", d, r->hist_rede[d], r->hist_influenciador[d]);
+    fclose(f);
+
+    c = snprintf(caminho, sizeof caminho, "%s_perfis.csv", prefixo);
+    f = (c > 0 && (size_t)c < sizeof caminho) ? fopen(caminho, "w") : NULL;
+    if (!f) {
+        fprintf(stderr, "erro: não foi possível gravar '%s'\n", caminho);
+        return 0;
+    }
+    fprintf(f, "perfil,alcancados,excentricidade,dist_media,dist_influenciador_mais_proximo,"
+               "influenciadores_alcancados,dist_media_influenciadores\n");
+    for (size_t i = 0; i < r->num_perfis; i++) {
+        const SeparacaoPerfil *p = &r->perfis[i];
+        fprintf(f, "%llu,%zu,%zu,%.4f,", idmap_original(ids, p->vertice), p->alcancados,
+                p->excentricidade, p->dist_media);
+        if (p->dist_influenciador == SIZE_MAX)
+            fprintf(f, ",");   /* nenhum influenciador alcançável: campo vazio */
+        else
+            fprintf(f, "%zu,", p->dist_influenciador);
+        fprintf(f, "%zu,%.4f\n", p->influenciadores_alcancados, p->dist_media_influenciadores);
+    }
+    fclose(f);
+    return 1;
+}
+
+/* --algo separacao: graus de separação entre perfis comuns e influenciadores
+ * (#17), na visão direcionada. Devolve o código de saída do programa. */
+static int executar_separacao(const EdgeList *el, const Opcoes *op)
+{
+    GraphRep rep = op->estrutura == ESTRUTURA_MATRIZ ? GRAPH_MATRIX : GRAPH_LIST;
+    IdMap ids;
+    idmap_iniciar(&ids);
+    Graph *g;
+    if (graph_build(el, &ids, rep, GRAPH_DIRECTED, &g) != GRAPH_OK) {
+        fprintf(stderr, "erro: memória insuficiente para montar o grafo como %s\n",
+                graph_rep_name(rep));
+        idmap_liberar(&ids);
+        return 1;
+    }
+
+    SeparacaoResultado r;
+    SeparacaoStatus st = separacao_analisar(g, SEPARACAO_FRACAO_PADRAO, SEPARACAO_PERFIS_PADRAO,
+                                            op->semente_rng, &r);
+    if (st != SEPARACAO_OK) {
+        fprintf(stderr, "erro: %s\n", st == SEPARACAO_ERRO_MEMORIA
+                                          ? "memória insuficiente para a análise"
+                                          : "o grafo não tem perfis comuns para analisar");
+        graph_destroy(g);
+        idmap_liberar(&ids);
+        return 1;
+    }
+
+    size_t n = graph_num_vertices(g);
+    printf("Graus de separação (%s, visão direcionada, semente %llu)\n", graph_rep_name(rep),
+           op->semente_rng);
+    printf("  influenciadores: %zu (%.0f%% com mais seguidores; pelo menos %zu seguidores)\n",
+           r.num_influenciadores, 100.0 * SEPARACAO_FRACAO_PADRAO, r.grau_entrada_corte);
+    printf("  perfis comuns analisados: %zu\n", r.num_perfis);
+    printf("  perfis que não alcançam nenhum influenciador: %zu (%.2f%%)\n",
+           r.perfis_sem_influenciador, 100.0 * (double)r.perfis_sem_influenciador / (double)r.num_perfis);
+    printf("  distância média perfil comum -> influenciador mais próximo: %.4f\n",
+           r.dist_media_influenciador);
+    printf("  distância média perfil comum -> influenciadores (todos os alcançados): %.4f\n",
+           r.dist_media_conjunto);
+    printf("  distância média geral da rede (a partir dos perfis): %.4f\n", r.dist_media_rede);
+    printf("  diâmetro estimado (maior excentricidade entre os perfis): %zu\n",
+           r.diametro_estimado);
+
+    int codigo = 0;
+    if (n <= SEPARACAO_LIMITE_EXATO) {
+        size_t diam;
+        double media;
+        if (separacao_exato(g, &diam, &media) == SEPARACAO_OK)
+            printf("  exato (BFS de todos os %zu vértices): diâmetro %zu, distância média %.4f\n",
+                   n, diam, media);
+        else {
+            fprintf(stderr, "erro: memória insuficiente para o cálculo exato\n");
+            codigo = 1;
+        }
+    }
+    if (op->saida && !gravar_separacao(op->saida, &r, &ids))
+        codigo = 1;
+
+    separacao_liberar(&r);
+    graph_destroy(g);
+    idmap_liberar(&ids);
+    return codigo;
+}
+
 int main(int argc, char **argv)
 {
     Opcoes op;
@@ -135,6 +328,10 @@ int main(int argc, char **argv)
     int codigo = 0;
     if (op.pasta_amostras) {
         codigo = gerar_amostras(&el, &op);
+    } else if (op.algoritmo == ALGO_BFS) {
+        codigo = executar_bfs(&el, &op);
+    } else if (op.algoritmo == ALGO_SEPARACAO) {
+        codigo = executar_separacao(&el, &op);
     } else if (op.algoritmo != ALGO_NENHUM) {
         fprintf(stderr, "o algoritmo '%s' ainda não foi implementado\n",
                 cli_nome_algoritmo(op.algoritmo));

@@ -208,8 +208,23 @@ Código de saída: `0` em caso de sucesso, `1` em erro (argumento inválido, arq
 ilegível), `2` quando o pedido não pôde ser atendido por completo — um algoritmo que
 ainda não foi implementado, ou uma amostra maior que o componente da semente.
 
-Os algoritmos de `--algo` ainda não estão ligados: o programa aceita o nome e responde
-que ele ainda não foi implementado. Quando a instrumentação (RF03) estiver pronta, toda
+```bash
+# BFS a partir do usuário 307642294: alcance, excentricidade, distância média e
+# histograma de distâncias (gravado em CSV com --output)
+./bin/grafos --input data/samples/bfs_307642294_n1000.txt --algo bfs --source 307642294 \
+             --struct matriz --output results/bfs_hist.csv
+```
+
+```bash
+# graus de separação entre perfis comuns e influenciadores (1% com mais seguidores),
+# a partir de 1.000 perfis sorteados; grava results/separacao_histograma.csv e
+# results/separacao_perfis.csv. Método e resultados em results/separacao.md
+./bin/grafos --input data/raw/twitter_combined.txt --algo separacao --output results/separacao
+```
+
+O BFS percorre a visão direcionada, no sentido das arestas. Os demais algoritmos de
+`--algo` ainda não estão ligados: o programa aceita o nome e responde que ele ainda não
+foi implementado. Quando a instrumentação (RF03) estiver pronta, toda
 execução de algoritmo vai acrescentar uma linha a `results/log.csv` com timestamp,
 dataset, N, M, estrutura, algoritmo, tempo em ms, memória em KB e número da repetição.
 

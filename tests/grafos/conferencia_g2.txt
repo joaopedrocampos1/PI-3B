@@ -1,0 +1,8 @@
+# Grafo G2 da conferência manual (#13): 5 vértices, 5 arestas.
+# Desenho e gabarito em tests/conferencia_manual.md.
+# Quadrado 0-1-2-3 com a cauda 3-4: bipartido.
+0 1
+1 2
+2 3
+3 0
+3 4
