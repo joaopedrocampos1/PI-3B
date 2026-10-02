@@ -7,8 +7,10 @@ espalha**: quão distantes os usuários estão entre si, que parcelas da rede fi
 inalcançáveis a partir de um ponto, e quais usuários funcionam como pontes cuja
 remoção fragmenta a rede.
 
-> **Status:** Fase I em desenvolvimento. O programa já lê o dataset e gera as amostras do
-> protocolo experimental; as estruturas de grafo e os algoritmos ainda estão sendo feitos.
+> **Status:** Fase I em desenvolvimento. O programa lê o dataset, gera as amostras do
+> protocolo experimental, monta o grafo como lista ou matriz e executa BFS, graus de
+> separação e componentes conexos, registrando tempo e memória de cada execução.
+> DFS, ciclos, bipartição e articulação ainda não estão ligados à linha de comando.
 > O andamento fica no [board do projeto](https://github.com/users/joaopedrocampos1/projects/4)
 > e nas [issues](https://github.com/joaopedrocampos1/PI-3B/issues).
 
@@ -138,12 +140,13 @@ sem subpastas espelhadas.
 
 | Prefixo | Módulo | Responsável |
 |---|---|---|
-| `edgelist.c` `idmap.c` `dot.c` | leitura, remapeamento de IDs e exportação Graphviz | DEV1 |
+| `edgelist.c` `idmap.c` | leitura da edge list e remapeamento de IDs | DEV1 |
+| `subgraph.c` | amostragem para o protocolo experimental | DEV1 |
 | `graph.c` `graph_list.c` `graph_matrix.c` | as duas representações e o despacho entre elas | DEV2 |
-| `bfs.c` `components.c` `bipartite.c` | buscas em largura e conectividade | DEV3 |
+| `bfs.c` `separacao.c` `componentes.c` | buscas em largura, graus de separação e conectividade | DEV3 |
 | `dfs.c` `cycles.c` `tarjan.c` | busca em profundidade e algoritmos estruturais | DEV4 |
 | `timer.c` `memtrack.c` `logger.c` | instrumentação de tempo, memória e log | DEV4 |
-| `subgraph.c` | amostragem para o protocolo experimental | DEV1 |
+| `cli.c` `main.c` | linha de comando e ligação dos módulos | — |
 
 A separação por arquivo importa mais do que parece: com cinco pessoas commitando em
 paralelo por quatro semanas, cada um mexendo nos seus arquivos reduz conflito de merge.
@@ -152,8 +155,11 @@ revisão de mais de uma pessoa.
 
 ## Visualização
 
-Os grafos são exportados em formato Graphviz (`.dot`) para `results/dot/`, e
-renderizados com `scripts/render_dot.sh`.
+> Planejada, ainda não implementada: `results/dot/` e `results/figs/` existem, mas o
+> programa ainda não exporta `.dot`.
+
+Os grafos serão exportados em formato Graphviz (`.dot`) para `results/dot/` e
+renderizados em lote por um script em `scripts/`.
 
 A visualização só é legível em grafos pequenos: com mais de algumas centenas de
 vértices o resultado vira uma mancha. Ela é usada, portanto, nos subgrafos amostrados,
@@ -165,13 +171,59 @@ A exportação colore os vértices e arestas conforme o resultado do algoritmo e
 componentes conexos em cores distintas, as duas classes da bipartição em cores opostas,
 pontes destacadas.
 
+## Do zero à primeira execução
+
+### Pré-requisitos
+
+- **Sistema:** Linux, macOS ou WSL no Windows. O programa usa chamadas POSIX
+  (`clock_gettime`) e não compila nativamente no Windows (MinGW/MSVC).
+- **Compilação:** `gcc` com suporte a C11 e `make`.
+- **Dataset** (opcional, só para o grafo completo): `curl`, `sha256sum` e `gunzip`.
+  As 12 amostras do protocolo já vêm no repositório.
+- **Opcional:** `valgrind`, para conferir vazamentos.
+
+No Ubuntu/Debian (inclusive no WSL), tudo isso se instala com:
+
+```bash
+sudo apt install build-essential curl valgrind
+```
+
+### Passo a passo
+
+```bash
+git clone https://github.com/joaopedrocampos1/PI-3B.git
+cd PI-3B
+
+make                          # compila bin/grafos
+make test                     # roda os testes; deve terminar com "0 falha(s)" em todos
+
+# primeira execução, sobre uma amostra versionada (não precisa do dataset)
+./bin/grafos --input data/samples/bfs_307642294_n1000.txt --algo componentes
+
+# para usar o grafo completo, baixe o dataset (44 MB descompactado)
+./scripts/baixar_dataset.sh
+./bin/grafos --input data/raw/twitter_combined.txt
+```
+
+A execução de `componentes` imprime algo como:
+
+```
+data/samples/bfs_307642294_n1000.txt: 1000 vértices, 38064 arestas
+Componentes fortemente conexos (lista, visão direcionada)
+  componentes: ...
+  tempo: ... ms | memória: ... KB (execução 1)
+...
+```
+
+e acrescenta duas linhas a `results/log.csv`.
+
 ## Compilação
 
 Requer `gcc` e `make`. Nenhuma dependência externa.
 
 ```bash
 make          # compila bin/grafos
-make test     # compila e roda os testes de tests/
+make test     # compila e roda os testes de tests/ (o mesmo que ./tests/run_tests.sh)
 make clean
 ```
 
@@ -195,7 +247,7 @@ aparece como pulado e os demais rodam normalmente.
 |---|---|
 | `--input` | Arquivo de entrada (edge list em CSV ou TXT). Obrigatória |
 | `--struct` | `lista` ou `matriz`, alternável sem recompilar (RF02). Padrão: `lista` |
-| `--algo` | `bfs`, `dfs`, `componentes`, `ciclos`, `bipartido`, `articulacao` |
+| `--algo` | `bfs`, `separacao`, `componentes` (ligados); `dfs`, `ciclos`, `bipartido`, `articulacao` (ainda não) |
 | `--source` | Vértice de origem (ID original), para os algoritmos que precisam de um |
 | `--output` | Arquivo de saída dos resultados |
 | `--amostrar` | Pasta onde gravar as amostras: 3 sementes sorteadas × N = 100, 250, 500 e 1.000 |
@@ -266,6 +318,23 @@ O leitor aceita separadores variados, ignora comentários e arestas duplicadas, 
 reporta linhas malformadas. Como IDs de datasets reais costumam ser esparsos, eles são
 remapeados internamente para o intervalo `0..V-1`, preservando o mapa inverso para
 exibição.
+
+## Formatos de saída
+
+Os resultados vão para a saída padrão. Erros e avisos vão para a saída de erro.
+
+| Arquivo | Gerado por | Colunas |
+|---|---|---|
+| `results/log.csv` (ou `--log`) | toda execução de `--algo` | `timestamp,dataset,N,M,estrutura,algoritmo,tempo_ms,memoria_kb,execucao_num` |
+| `--output` | `bfs` | `distancia,vertices`: quantos vértices estão a cada distância da origem |
+| `--output` | `componentes` | `tipo,tamanho,componentes`: `tipo` é `fortes` ou `fracos` |
+| `<prefixo>_histograma.csv` | `separacao` com `--output <prefixo>` | `saltos,pares_rede,perfis_influenciador` |
+| `<prefixo>_perfis.csv` | `separacao` com `--output <prefixo>` | `perfil,alcancados,excentricidade,dist_media,dist_influenciador_mais_proximo,influenciadores_alcancados,dist_media_influenciadores` |
+| `<pasta>/bfs_<semente>_n<N>.txt` | `--amostrar <pasta>` | edge list no formato de entrada, com cabeçalho de comentários |
+
+No log, o `timestamp` está em UTC (ISO 8601), e o `algoritmo` é o nome de `--algo`,
+exceto em `componentes`, que grava `componentes_fortes` e `componentes_fracos`. A pasta
+de saída precisa existir: o programa não cria pastas.
 
 ## Dataset
 
