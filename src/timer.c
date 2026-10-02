@@ -1,6 +1,3 @@
-/* Define a macro necessária para habilitar o clock_gettime no padrão C11 */
-#define _POSIX_C_SOURCE 199309L
-
 #include <time.h>
 #include <stdlib.h>
 
