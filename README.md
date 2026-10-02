@@ -61,7 +61,7 @@ do RNF01 vale para os algoritmos de grafos, não para o ferramental de análise.
 |---|---|
 | BFS | Graus de separação, distância média, excentricidade |
 | DFS iterativa | Base para ciclos e classificação de arestas |
-| Componentes conexos | Fragmentação da rede, componente gigante |
+| Componentes conexos (Tarjan) | Fortemente conexos: quem alcança quem e o público inalcançável; fracamente conexos: se a rede é uma peça só |
 | Detecção de ciclos | Caminhos de retorno da informação |
 | Verificação de bipartição | Separabilidade em dois grupos |
 | Tarjan | Pontes e vértices de articulação |
@@ -222,11 +222,23 @@ ainda não foi implementado, ou uma amostra maior que o componente da semente.
 ./bin/grafos --input data/raw/twitter_combined.txt --algo separacao --output results/separacao
 ```
 
-O BFS percorre a visão direcionada, no sentido das arestas. Os demais algoritmos de
-`--algo` ainda não estão ligados: o programa aceita o nome e responde que ele ainda não
-foi implementado. Quando a instrumentação (RF03) estiver pronta, toda
-execução de algoritmo vai acrescentar uma linha a `results/log.csv` com timestamp,
-dataset, N, M, estrutura, algoritmo, tempo em ms, memória em KB e número da repetição.
+```bash
+# componentes fortemente conexos (visão direcionada) e fracamente conexos (visão
+# simetrizada): quantidade, gigante, unitários e distribuição de tamanhos, que
+# --output grava em CSV (tipo,tamanho,componentes)
+./bin/grafos --input data/raw/twitter_combined.txt --algo componentes --output results/componentes.csv
+```
+
+O BFS percorre a visão direcionada, no sentido das arestas. Hoje estão ligados `bfs`,
+`separacao` e `componentes`; para os demais algoritmos de `--algo`, o programa aceita o
+nome e responde que ele ainda não foi implementado.
+
+Cada execução de `componentes` acrescenta uma linha por tipo de componente a
+`results/log.csv` (RF03), com timestamp, dataset, N, M, estrutura, algoritmo, tempo em
+ms, memória em KB e número da repetição. O tempo é só o do algoritmo, sem a montagem do
+grafo; a memória é o pico do memtrack da montagem do grafo até o fim do algoritmo, então
+inclui a estrutura, que é o que diferencia lista de matriz. `bfs` e `separacao` ainda
+não gravam no log.
 
 ## Formato de entrada
 

@@ -7,6 +7,7 @@
  *   ./bin/test_subgraph
  */
 #include "subgraph.h"
+#include "memtrack.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -211,8 +212,31 @@ static void sorteio_nos_limites(void)
     edgelist_liberar(&el);
 }
 
+/* A lista de vizinhos e as amostras passam pelo memtrack (RF03): aparecem
+ * na medição enquanto existem e somem dela quando são liberadas. */
+static void memoria_medida_pelo_memtrack(void)
+{
+    EdgeList el = grafo("1 2\n2 3\n3 1\n");
+    size_t antes = mt_current_bytes();
+    Amostrador a;
+    CHECK(subgraph_preparar(&a, &el) == AMOSTRA_OK);
+    size_t com_amostrador = mt_current_bytes();
+    CHECK(com_amostrador > antes);
+
+    EdgeList sub;
+    CHECK(subgraph_bfs(&a, 1, 2, &sub) == AMOSTRA_OK);
+    CHECK(mt_current_bytes() > com_amostrador);
+    edgelist_liberar(&sub);
+    CHECK(mt_current_bytes() == com_amostrador);
+
+    subgraph_liberar(&a);
+    CHECK(mt_current_bytes() == antes);
+    edgelist_liberar(&el);
+}
+
 int main(void)
 {
+    memoria_medida_pelo_memtrack();
     sorteio_de_sementes();
     sorteio_nos_limites();
     erros_e_limites();

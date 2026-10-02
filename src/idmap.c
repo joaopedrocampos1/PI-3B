@@ -1,4 +1,5 @@
 #include "idmap.h"
+#include "memtrack.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -30,11 +31,11 @@ static size_t sondar(const IdMap *m, unsigned long long id)
 /* Troca a tabela por uma com `nova_cap` slots e reposiciona todos os IDs. */
 static int redimensionar_tabela(IdMap *m, size_t nova_cap)
 {
-    size_t *nova = calloc(nova_cap, sizeof *nova);
+    size_t *nova = mt_calloc(nova_cap, sizeof *nova);
     if (!nova)
         return 0;
 
-    free(m->tabela);
+    mt_free(m->tabela);
     m->tabela = nova;
     m->cap_tabela = nova_cap;
     for (size_t k = 0; k < m->n; k++)
@@ -48,7 +49,7 @@ static int reservar_um(IdMap *m)
 {
     if (m->n == m->cap_originais) {
         size_t nova = m->cap_originais ? m->cap_originais * 2 : CAP_INICIAL;
-        unsigned long long *p = realloc(m->originais, nova * sizeof *p);
+        unsigned long long *p = mt_realloc(m->originais, nova * sizeof *p);
         if (!p)
             return 0;
         m->originais = p;
@@ -100,7 +101,7 @@ unsigned long long idmap_original(const IdMap *m, size_t indice)
 
 void idmap_liberar(IdMap *m)
 {
-    free(m->tabela);
-    free(m->originais);
+    mt_free(m->tabela);
+    mt_free(m->originais);
     idmap_iniciar(m);
 }

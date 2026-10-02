@@ -49,8 +49,7 @@ void graph_analisar_articulacoes(const Graph *g, size_t top_n) {
         graph_neighbors_begin(g, i, &(pilha[topo].it));
 
         while (topo >= 0) {
-            size_t u = strncpy ? pilha[topo].u : pilha[topo].u; // Evita avisos de compilação
-            u = pilha[topo].u;
+            size_t u = pilha[topo].u;
             size_t pai = pilha[topo].pai;
 
             if (pilha[topo].estado == 0) {

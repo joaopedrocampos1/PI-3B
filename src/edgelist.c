@@ -1,4 +1,5 @@
 #include "edgelist.h"
+#include "memtrack.h"
 
 #include <ctype.h>
 #include <errno.h>
@@ -13,7 +14,7 @@ static int anexar(EdgeList *el, size_t *cap, unsigned long long o, unsigned long
 {
     if (el->n == *cap) {
         size_t nova = *cap ? *cap * 2 : 1024;
-        Aresta *p = realloc(el->arestas, nova * sizeof *p);
+        Aresta *p = mt_realloc(el->arestas, nova * sizeof *p);
         if (!p)
             return 0;
         el->arestas = p;
@@ -188,6 +189,6 @@ EdgeListStatus edgelist_gravar(const char *caminho, const EdgeList *el, const ch
 
 void edgelist_liberar(EdgeList *el)
 {
-    free(el->arestas);
+    mt_free(el->arestas);
     memset(el, 0, sizeof *el);
 }

@@ -1,11 +1,14 @@
 #include "bfs.h"
 #include "cli.h"
+#include "componentes.h"
 #include "edgelist.h"
 #include "graph.h"
 #include "idmap.h"
+#include "logger.h"
 #include "memtrack.h"
 #include "separacao.h"
 #include "subgraph.h"
+#include "timer.h"
 
 #include <stdint.h>
 #include <stdio.h>
@@ -292,6 +295,120 @@ static int executar_separacao(const EdgeList *el, const Opcoes *op)
     return codigo;
 }
 
+/* --algo componentes (#18): fortemente conexos (visão direcionada), que
+ * respondem quem alcança quem, e fracamente conexos (visão simetrizada), que
+ * respondem se a rede é uma peça só.
+ *
+ * Cada um vira uma linha em results/log.csv (RF03):
+ *   tempo_ms    só o algoritmo, sem a montagem do grafo;
+ *   memoria_kb  pico do memtrack da montagem do grafo até o fim do algoritmo,
+ *               descontado o que já existia antes (o grafo entra na conta,
+ *               porque é o que diferencia lista de matriz).
+ * Devolve o código de saída do programa. */
+static int executar_componentes(const EdgeList *el, const Opcoes *op)
+{
+    static const struct {
+        GraphView view;
+        const char *algoritmo;   /* nome no log */
+        const char *titulo;
+        const char *unitarios;   /* o que um componente unitário significa */
+    } TIPOS[] = {
+        {GRAPH_DIRECTED, "componentes_fortes", "fortemente conexos",
+         "usuários cujo conteúdo não volta a circular até eles"},
+        {GRAPH_SYMMETRIC, "componentes_fracos", "fracamente conexos",
+         "usuários sem nenhuma ligação"},
+    };
+    GraphRep rep = op->estrutura == ESTRUTURA_MATRIZ ? GRAPH_MATRIX : GRAPH_LIST;
+
+    FILE *csv = NULL;
+    if (op->saida) {
+        csv = fopen(op->saida, "w");
+        if (!csv) {
+            fprintf(stderr, "erro: não foi possível gravar '%s'\n", op->saida);
+            return 1;
+        }
+        fprintf(csv, "tipo,tamanho,componentes\n");
+    }
+
+    int codigo = 0;
+    for (size_t t = 0; t < sizeof TIPOS / sizeof TIPOS[0] && codigo != 1; t++) {
+        mt_reset_peak();
+        size_t base = mt_current_bytes();
+
+        IdMap ids;
+        idmap_iniciar(&ids);
+        Graph *g;
+        if (graph_build(el, &ids, rep, TIPOS[t].view, &g) != GRAPH_OK) {
+            fprintf(stderr, "erro: memória insuficiente para montar o grafo como %s\n",
+                    graph_rep_name(rep));
+            idmap_liberar(&ids);
+            codigo = 1;
+            break;
+        }
+
+        Timer *cron = timer_criar();
+        ComponentesResultado r;
+        ComponentesStatus st = COMPONENTES_ERRO_MEMORIA;
+        double ms = 0;
+        if (cron) {
+            timer_iniciar(cron);
+            st = componentes_executar(g, &r);
+            ms = timer_parar_ms(cron);
+            timer_destruir(cron);
+        }
+        double kb = (double)(mt_peak_bytes() - base) / 1024.0;
+
+        ComponentesFaixa *faixas = NULL;
+        size_t k = 0;
+        if (st != COMPONENTES_OK || componentes_distribuicao(&r, &faixas, &k) != COMPONENTES_OK) {
+            fprintf(stderr, "erro: memória insuficiente para os componentes\n");
+            if (st == COMPONENTES_OK)
+                componentes_liberar(&r);
+            graph_destroy(g);
+            idmap_liberar(&ids);
+            codigo = 1;
+            break;
+        }
+
+        size_t n = graph_num_vertices(g);
+        printf("Componentes %s (%s, visão %s)\n", TIPOS[t].titulo, graph_rep_name(rep),
+               graph_view_name(TIPOS[t].view));
+        printf("  componentes: %zu\n", r.num_componentes);
+        printf("  gigante: %zu de %zu vértices (%.2f%%)\n", r.tamanho_gigante, n,
+               n ? 100.0 * (double)r.tamanho_gigante / (double)n : 0.0);
+        printf("  unitários: %zu (%s)\n", r.unitarios, TIPOS[t].unitarios);
+        printf("  tamanhos:");
+        for (size_t i = 0; i < k && i < 6; i++)
+            printf("%s %zu (x%zu)", i ? "," : "", faixas[i].tamanho, faixas[i].quantidade);
+        printf("%s\n", k > 6 ? ", ..." : "");
+        printf("  tempo: %.3f ms | memória: %.1f KB\n", ms, kb);
+
+        if (csv)
+            for (size_t i = 0; i < k; i++)
+                fprintf(csv, "%s,%zu,%zu\n", t == 0 ? "fortes" : "fracos", faixas[i].tamanho,
+                        faixas[i].quantidade);
+
+        LogRegistro reg = {op->entrada, n, graph_num_edges(g), graph_rep_name(rep),
+                           TIPOS[t].algoritmo, ms, kb, 1};
+        if (log_registrar(LOG_CAMINHO_PADRAO, &reg) != LOG_OK) {
+            fprintf(stderr, "aviso: não foi possível gravar em %s (a pasta existe?)\n",
+                    LOG_CAMINHO_PADRAO);
+            codigo = 2;
+        }
+
+        mt_free(faixas);
+        componentes_liberar(&r);
+        graph_destroy(g);
+        idmap_liberar(&ids);
+    }
+
+    if (csv && fclose(csv) != 0 && codigo == 0) {
+        fprintf(stderr, "erro: não foi possível gravar '%s'\n", op->saida);
+        codigo = 1;
+    }
+    return codigo;
+}
+
 int main(int argc, char **argv)
 {
     Opcoes op;
@@ -332,6 +449,8 @@ int main(int argc, char **argv)
         codigo = executar_bfs(&el, &op);
     } else if (op.algoritmo == ALGO_SEPARACAO) {
         codigo = executar_separacao(&el, &op);
+    } else if (op.algoritmo == ALGO_COMPONENTES) {
+        codigo = executar_componentes(&el, &op);
     } else if (op.algoritmo != ALGO_NENHUM) {
         fprintf(stderr, "o algoritmo '%s' ainda não foi implementado\n",
                 cli_nome_algoritmo(op.algoritmo));
