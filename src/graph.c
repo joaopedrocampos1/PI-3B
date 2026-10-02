@@ -3,12 +3,14 @@
 
 #include <stdlib.h>
 
-/* Representações disponíveis, indexadas por GraphRep. A matriz entra aqui
- * quando o #11 for integrado; até lá, pedir GRAPH_MATRIX devolve
- * GRAPH_ERR_UNAVAILABLE. */
+/* Declaração das tabelas de operações fornecidas por cada módulo */
+extern const GraphOps GRAPH_LIST_OPS;     /* implementado em graph_list.c */
+extern const GraphOps GRAPH_MATRIX_OPS;   /* será implementado em graph_matrix.c (#11) */
+
+/* Representações disponíveis, indexadas por GraphRep. */
 static const GraphOps *const REPRESENTACOES[] = {
     [GRAPH_LIST] = &GRAPH_LIST_OPS,
-    [GRAPH_MATRIX] = NULL,
+    [GRAPH_MATRIX] = &GRAPH_MATRIX_OPS,
 };
 
 static int sem_sentido(GraphView view)
