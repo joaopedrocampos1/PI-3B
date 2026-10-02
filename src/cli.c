@@ -1,7 +1,9 @@
 #include "cli.h"
+#include "logger.h"
 
 #include <ctype.h>
 #include <errno.h>
+#include <limits.h>
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
@@ -18,7 +20,8 @@ static const char *NOMES_ALGORITMO[] = {
 };
 #define NUM_ALGORITMOS (sizeof NOMES_ALGORITMO / sizeof NOMES_ALGORITMO[0])
 
-typedef enum { OP_INPUT, OP_STRUCT, OP_ALGO, OP_SOURCE, OP_OUTPUT, OP_AMOSTRAR, OP_SEMENTE_RNG } Opcao;
+typedef enum { OP_INPUT, OP_STRUCT, OP_ALGO, OP_SOURCE, OP_OUTPUT, OP_AMOSTRAR, OP_SEMENTE_RNG,
+               OP_EXECUCAO, OP_LOG } Opcao;
 
 static const struct {
     const char *nome;
@@ -26,7 +29,7 @@ static const struct {
 } OPCOES[] = {
     {"input", OP_INPUT},   {"struct", OP_STRUCT},     {"algo", OP_ALGO},
     {"source", OP_SOURCE}, {"output", OP_OUTPUT},     {"amostrar", OP_AMOSTRAR},
-    {"semente-rng", OP_SEMENTE_RNG},
+    {"semente-rng", OP_SEMENTE_RNG}, {"execucao", OP_EXECUCAO}, {"log", OP_LOG},
 };
 #define NUM_OPCOES (sizeof OPCOES / sizeof OPCOES[0])
 
@@ -63,6 +66,9 @@ static CliStatus aplicar(Opcoes *op, Opcao id, const char *valor, char *erro, si
     case OP_AMOSTRAR:
         op->pasta_amostras = valor;
         break;
+    case OP_LOG:
+        op->log = valor;
+        break;
     case OP_STRUCT:
         if (strcmp(valor, "lista") == 0)
             op->estrutura = ESTRUTURA_LISTA;
@@ -88,6 +94,13 @@ static CliStatus aplicar(Opcoes *op, Opcao id, const char *valor, char *erro, si
             return falhar(erro, tam, "--semente-rng precisa ser um inteiro não negativo, não '%s'",
                           valor);
         break;
+    case OP_EXECUCAO: {
+        unsigned long long n;
+        if (!ler_numero(valor, &n) || n == 0 || n > UINT_MAX)
+            return falhar(erro, tam, "--execucao precisa ser um inteiro positivo, não '%s'", valor);
+        op->execucao = (unsigned)n;
+        break;
+    }
     }
     return CLI_OK;
 }
@@ -98,6 +111,8 @@ CliStatus cli_ler(int argc, char **argv, Opcoes *op, char *erro, size_t tam_erro
     op->estrutura = ESTRUTURA_LISTA;
     op->algoritmo = ALGO_NENHUM;
     op->semente_rng = CLI_SEMENTE_RNG_PADRAO;
+    op->execucao = 1;
+    op->log = LOG_CAMINHO_PADRAO;
 
     for (int i = 1; i < argc; i++) {
         const char *arg = argv[i];
@@ -151,6 +166,10 @@ void cli_uso(FILE *f, const char *programa)
             "                         500 e 1.000) em <pasta>\n"
             "  --semente-rng <n>      semente dos sorteios: amostras e perfis da separacao\n"
             "                         (padrão: %llu)\n"
+            "  --execucao <n>         número desta execução, gravado no log; a 1 é o\n"
+            "                         aquecimento do protocolo (padrão: 1)\n"
+            "  --log <arquivo>        CSV onde cada execução de --algo acrescenta uma linha\n"
+            "                         com tempo e memória (padrão: %s)\n"
             "  --help                 mostra esta ajuda\n"
             "\n"
             "Toda opção aceita também a forma --opcao=valor.\n"
@@ -159,7 +178,7 @@ void cli_uso(FILE *f, const char *programa)
             "exemplos:\n"
             "  %s --input data/raw/twitter_combined.txt\n"
             "  %s --input data/raw/twitter_combined.txt --amostrar data/samples\n",
-            programa, CLI_SEMENTE_RNG_PADRAO, programa, programa);
+            programa, CLI_SEMENTE_RNG_PADRAO, LOG_CAMINHO_PADRAO, programa, programa);
 }
 
 const char *cli_nome_algoritmo(Algoritmo a)
