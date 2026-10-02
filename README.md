@@ -181,11 +181,12 @@ pontes destacadas.
 - **Dataset** (opcional, só para o grafo completo): `curl`, `sha256sum` e `gunzip`.
   As 12 amostras do protocolo já vêm no repositório.
 - **Opcional:** `valgrind`, para conferir vazamentos.
+- **Gráficos** (opcional, só para `scripts/graficos.py`): Python 3 com `matplotlib`.
 
 No Ubuntu/Debian (inclusive no WSL), tudo isso se instala com:
 
 ```bash
-sudo apt install build-essential curl valgrind
+sudo apt install build-essential curl valgrind python3-matplotlib
 ```
 
 ### Passo a passo
@@ -394,14 +395,39 @@ Circles in Ego Networks*. NIPS, 2012.
 
 ## Protocolo experimental
 
-Cada algoritmo é executado sobre subgrafos de **N = 100, 250, 500, 1.000 e o grafo
-completo**, nas duas representações, com repetições por configuração (descartando a
-primeira execução como aquecimento) e registro de média e desvio padrão.
+O protocolo completo está na Metodologia do artigo. Em resumo: os seis algoritmos
+rodam sobre as 12 amostras (N = 100, 250, 500 e 1.000) e o grafo completo, nas duas
+representações, cada configuração 11 vezes seguidas; a primeira é o aquecimento e é
+descartada. BFS e DFS partem da semente da própria amostra e, no grafo completo, de
+cada uma das três sementes, o que dá 164 configurações.
 
-Os resultados alimentam duas análises: o crescimento do tempo de execução contra
-O(|V| + |E|), e a comparação de memória entre lista e matriz de adjacência. A matriz
-tem custo O(V²) e tende a se tornar inviável em redes sociais reais, que são esparsas
-— confirmar esse limite experimentalmente é parte do resultado, não um problema.
+```bash
+./scripts/baixar_dataset.sh     # o grafo completo, se ainda não estiver em data/raw/
+./scripts/bateria.sh            # ~5 min; grava results/log.csv do zero
+python3 scripts/graficos.py     # results/figs/*.png e results/resumo.csv
+```
+
+| Arquivo | Conteúdo |
+|---|---|
+| `results/log.csv` | uma linha por execução: 2.090 linhas na bateria versionada |
+| `results/maquina.txt` | CPU, memória, sistema, compilador e flags da máquina que rodou a bateria |
+| `results/inviaveis.csv` | configurações que falharam (por exemplo, sem memória para a matriz); vazio na bateria versionada |
+| `results/resumo.csv` | média e desvio padrão de tempo e memória por algoritmo, estrutura e N |
+| `results/figs/tempo.png` | tempo × \|V\| + \|E\|, um painel por algoritmo, contra a referência O(V + E) |
+| `results/figs/memoria.png` | memória de lista e matriz por tamanho de instância |
+
+A bateria se recusa a rodar se `results/log.csv` já existir, para não misturar
+execuções; mova ou apague o log antes de refazê-la.
+
+O que a bateria versionada mostra:
+
+- Com lista, todos os algoritmos acompanham a reta O(V + E) do menor ao maior grafo.
+- Com a matriz de bits, o custo é V²/64 + E: nas amostras, o termo V²/64 é desprezível
+  e a matriz fica perto da lista; no grafo completo ele domina, e a matriz fica de 3,6
+  (articulação) a 9,3 (BFS) vezes mais lenta.
+- Na memória há um ponto de virada. As amostras, densas, cabem numa matriz de bits
+  menor que a lista (0,3 a 0,5 vez); no grafo completo, esparso, a matriz ocupa cerca
+  de 800 MB, 24 vezes a lista.
 
 ## Fase II
 
