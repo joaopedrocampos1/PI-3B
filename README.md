@@ -215,6 +215,13 @@ ainda não foi implementado, ou uma amostra maior que o componente da semente.
              --struct matriz --output results/bfs_hist.csv
 ```
 
+```bash
+# graus de separação entre perfis comuns e influenciadores (1% com mais seguidores),
+# a partir de 1.000 perfis sorteados; grava results/separacao_histograma.csv e
+# results/separacao_perfis.csv. Método e resultados em results/separacao.md
+./bin/grafos --input data/raw/twitter_combined.txt --algo separacao --output results/separacao
+```
+
 O BFS percorre a visão direcionada, no sentido das arestas. Os demais algoritmos de
 `--algo` ainda não estão ligados: o programa aceita o nome e responde que ele ainda não
 foi implementado. Quando a instrumentação (RF03) estiver pronta, toda

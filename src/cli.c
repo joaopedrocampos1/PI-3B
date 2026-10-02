@@ -14,6 +14,7 @@ static const char *NOMES_ALGORITMO[] = {
     [ALGO_CICLOS] = "ciclos",
     [ALGO_BIPARTIDO] = "bipartido",
     [ALGO_ARTICULACAO] = "articulacao",
+    [ALGO_SEPARACAO] = "separacao",
 };
 #define NUM_ALGORITMOS (sizeof NOMES_ALGORITMO / sizeof NOMES_ALGORITMO[0])
 
@@ -141,12 +142,15 @@ void cli_uso(FILE *f, const char *programa)
             "\n"
             "  --input <arquivo>      edge list (uma aresta \"origem destino\" por linha)\n"
             "  --struct lista|matriz  representação do grafo (padrão: lista)\n"
-            "  --algo <nome>          bfs, dfs, componentes, ciclos, bipartido, articulacao\n"
+            "  --algo <nome>          bfs, dfs, componentes, ciclos, bipartido, articulacao,\n"
+            "                         separacao\n"
             "  --source <id>          vértice de origem, para os algoritmos que usam um\n"
-            "  --output <arquivo>     arquivo de saída dos resultados\n"
+            "  --output <arquivo>     arquivo de saída dos resultados; em separacao, prefixo\n"
+            "                         dos CSVs (<prefixo>_histograma.csv e _perfis.csv)\n"
             "  --amostrar <pasta>     grava as amostras por BFS (3 sementes x N = 100, 250,\n"
             "                         500 e 1.000) em <pasta>\n"
-            "  --semente-rng <n>      semente do sorteio das amostras (padrão: %llu)\n"
+            "  --semente-rng <n>      semente dos sorteios: amostras e perfis da separacao\n"
+            "                         (padrão: %llu)\n"
             "  --help                 mostra esta ajuda\n"
             "\n"
             "Toda opção aceita também a forma --opcao=valor.\n"

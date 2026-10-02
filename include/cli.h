@@ -23,7 +23,8 @@ typedef enum {
     ALGO_COMPONENTES,
     ALGO_CICLOS,
     ALGO_BIPARTIDO,
-    ALGO_ARTICULACAO
+    ALGO_ARTICULACAO,
+    ALGO_SEPARACAO      /* graus de separação perfil comum -> influenciador (#17) */
 } Algoritmo;
 
 typedef struct {
