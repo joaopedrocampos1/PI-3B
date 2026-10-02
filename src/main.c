@@ -1,6 +1,9 @@
+#include "bfs.h"
 #include "cli.h"
 #include "edgelist.h"
+#include "graph.h"
 #include "idmap.h"
+#include "memtrack.h"
 #include "subgraph.h"
 
 #include <stdio.h>
@@ -99,6 +102,87 @@ static int gerar_amostras(const EdgeList *el, const Opcoes *op)
     return codigo;
 }
 
+/* Quantos vértices estão a cada distância da origem. `hist` tem dist_max + 1
+ * posições. */
+static void histograma(const BfsResultado *r, size_t *hist)
+{
+    for (size_t d = 0; d <= r->dist_max; d++)
+        hist[d] = 0;
+    for (size_t v = 0; v < r->n; v++)
+        if (r->visitado[v])
+            hist[r->dist[v]]++;
+}
+
+/* --algo bfs: BFS na visão direcionada a partir de --source. Mostra o alcance
+ * e, com --output, grava o histograma de distâncias em CSV. Devolve o código
+ * de saída do programa. */
+static int executar_bfs(const EdgeList *el, const Opcoes *op)
+{
+    if (!op->tem_origem) {
+        fprintf(stderr, "erro: --algo bfs precisa de --source <id>\n");
+        return 1;
+    }
+    GraphRep rep = op->estrutura == ESTRUTURA_MATRIZ ? GRAPH_MATRIX : GRAPH_LIST;
+    IdMap ids;
+    idmap_iniciar(&ids);
+    Graph *g;
+    if (graph_build(el, &ids, rep, GRAPH_DIRECTED, &g) != GRAPH_OK) {
+        fprintf(stderr, "erro: memória insuficiente para montar o grafo como %s\n",
+                graph_rep_name(rep));
+        idmap_liberar(&ids);
+        return 1;
+    }
+
+    int codigo = 1;
+    size_t origem;
+    BfsResultado r;
+    size_t *hist = NULL;
+    if (!idmap_buscar(&ids, op->origem, &origem)) {
+        fprintf(stderr, "erro: o vértice %llu não existe no grafo\n", op->origem);
+        goto fim;
+    }
+    if (bfs_executar(g, origem, &r) != BFS_OK) {
+        fprintf(stderr, "erro: memória insuficiente para o BFS\n");
+        goto fim;
+    }
+    hist = mt_malloc((r.dist_max + 1) * sizeof *hist);
+    if (!hist) {
+        fprintf(stderr, "erro: memória insuficiente para o histograma\n");
+        bfs_liberar(&r);
+        goto fim;
+    }
+    histograma(&r, hist);
+
+    size_t n = graph_num_vertices(g);
+    printf("BFS a partir de %llu (%s, visão direcionada)\n", op->origem, graph_rep_name(rep));
+    printf("  alcançados: %zu de %zu vértices (%.2f%%)\n", r.alcancados, n,
+           100.0 * (double)r.alcancados / (double)n);
+    printf("  excentricidade: %zu\n", r.dist_max);
+    printf("  distância média: %.4f\n", r.dist_media);
+    for (size_t d = 1; d <= r.dist_max; d++)
+        printf("  %zu salto(s): %zu vértices\n", d, hist[d]);
+
+    codigo = 0;
+    if (op->saida) {
+        FILE *f = fopen(op->saida, "w");
+        if (!f) {
+            fprintf(stderr, "erro: não foi possível gravar '%s'\n", op->saida);
+            codigo = 1;
+        } else {
+            fprintf(f, "distancia,vertices\n");
+            for (size_t d = 0; d <= r.dist_max; d++)
+                fprintf(f, "%zu,%zu\n", d, hist[d]);
+            fclose(f);
+        }
+    }
+    mt_free(hist);
+    bfs_liberar(&r);
+fim:
+    graph_destroy(g);
+    idmap_liberar(&ids);
+    return codigo;
+}
+
 int main(int argc, char **argv)
 {
     Opcoes op;
@@ -135,6 +219,8 @@ int main(int argc, char **argv)
     int codigo = 0;
     if (op.pasta_amostras) {
         codigo = gerar_amostras(&el, &op);
+    } else if (op.algoritmo == ALGO_BFS) {
+        codigo = executar_bfs(&el, &op);
     } else if (op.algoritmo != ALGO_NENHUM) {
         fprintf(stderr, "o algoritmo '%s' ainda não foi implementado\n",
                 cli_nome_algoritmo(op.algoritmo));
