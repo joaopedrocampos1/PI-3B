@@ -1,0 +1,16 @@
+# Grafo G1 da conferência manual (#13): 12 vértices, 12 arestas direcionadas.
+# Desenho e gabarito em tests/conferencia_manual.md.
+# Dois ciclos dirigidos (0-1-2 e 3-4-5) ligados por 2 -> 3, uma cauda
+# 5 -> 6 -> 7 -> 8 e um componente separado 9 -> 10 -> 11.
+0 1
+1 2
+2 0
+2 3
+3 4
+4 5
+5 3
+5 6
+6 7
+7 8
+9 10
+10 11
