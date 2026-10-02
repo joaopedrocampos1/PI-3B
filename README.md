@@ -276,24 +276,16 @@ ainda não foi implementado, ou uma amostra maior que o componente da semente.
 ./bin/grafos --input data/raw/twitter_combined.txt --algo separacao --output results/separacao
 ```
 
-```bash
-# componentes fortemente conexos (visão direcionada) e fracamente conexos (visão
-# simetrizada): quantidade, gigante, unitários e distribuição de tamanhos, que
-# --output grava em CSV (tipo,tamanho,componentes)
-./bin/grafos --input data/raw/twitter_combined.txt --algo componentes --output results/componentes.csv
-```
+O BFS percorre a visão direcionada, no sentido das arestas. Os demais algoritmos de
+`--algo` ainda não estão ligados: o programa aceita o nome e responde que ele ainda não
+foi implementado.
 
-O BFS percorre a visão direcionada, no sentido das arestas. Hoje estão ligados `bfs`,
-`separacao` e `componentes`; para os demais algoritmos de `--algo`, o programa aceita o
-nome e responde que ele ainda não foi implementado.
-
-Toda execução de `--algo` acrescenta uma linha a `results/log.csv` (RF03), ou ao
-arquivo de `--log` — `componentes` grava uma por tipo de componente —, com as colunas
-`timestamp, dataset, N, M, estrutura, algoritmo, tempo_ms, memoria_kb, execucao_num`.
-O tempo é só o do algoritmo, sem a montagem do grafo; a memória é o pico do memtrack da
-montagem do grafo até o fim do algoritmo, então inclui a estrutura, que é o que
-diferencia lista de matriz. Como cada execução é um processo separado, o número da
-execução vem de `--execucao`:
+Toda execução de `--algo` acrescenta uma linha a `results/log.csv` (RF03), com as
+colunas `timestamp, dataset, N, M, estrutura, algoritmo, tempo_ms, memoria_kb,
+execucao_num`. Seguindo o protocolo do artigo, o tempo cobre só o algoritmo, e a
+memória é o pico do memtrack entre o início da construção do grafo e o fim do
+algoritmo. Como cada execução é um processo separado, o número da execução vem de
+`--execucao`:
 
 ```bash
 # 11 execuções da mesma configuração; a 1ª é o aquecimento, descartado na análise
