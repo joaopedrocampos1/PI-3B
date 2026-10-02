@@ -9,6 +9,7 @@
  * (scripts/baixar_dataset.sh); sem o arquivo, ele é pulado.
  */
 #include "edgelist.h"
+#include "memtrack.h"
 #include "idmap.h"
 
 #include <limits.h>
@@ -149,8 +150,24 @@ static void dataset_twitter_completo(void)
     edgelist_liberar(&el);
 }
 
+/* A tabela e o mapa inverso passam pelo memtrack (RF03): aparecem na
+ * medição enquanto existem e somem dela quando o mapa é liberado. */
+static void memoria_medida_pelo_memtrack(void)
+{
+    size_t antes = mt_current_bytes();
+    IdMap m;
+    idmap_iniciar(&m);
+    size_t i;
+    for (unsigned long long id = 0; id < 1000; id++)
+        idmap_inserir(&m, id * 7919, &i);
+    CHECK(mt_current_bytes() > antes);
+    idmap_liberar(&m);
+    CHECK(mt_current_bytes() == antes);
+}
+
 int main(void)
 {
+    memoria_medida_pelo_memtrack();
     dataset_twitter_completo();
     ids_nos_extremos();
     buscar_nao_insere();
