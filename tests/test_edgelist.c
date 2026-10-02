@@ -6,6 +6,7 @@
  *   ./bin/test_edgelist
  */
 #include "edgelist.h"
+#include "memtrack.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -311,8 +312,21 @@ static void disco_cheio_e_erro(void)
     edgelist_liberar(&orig);
 }
 
+/* A memória das arestas passa pelo memtrack (RF03): aparece na medição
+ * enquanto existe e volta ao valor inicial quando é liberada. */
+static void memoria_medida_pelo_memtrack(void)
+{
+    size_t antes = mt_current_bytes();
+    EdgeList el;
+    CHECK(edgelist_ler(fixture("1 2\n3 4\n"), &el) == EDGELIST_OK);
+    CHECK(mt_current_bytes() > antes);
+    edgelist_liberar(&el);
+    CHECK(mt_current_bytes() == antes);
+}
+
 int main(void)
 {
+    memoria_medida_pelo_memtrack();
     disco_cheio_e_erro();
     gravar_e_ler_de_volta();
     gravar_sem_comentario();

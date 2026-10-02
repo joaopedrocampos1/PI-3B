@@ -1,5 +1,6 @@
 #include "bfs.h"
 #include "cli.h"
+#include "componentes.h"
 #include "edgelist.h"
 #include "graph.h"
 #include "idmap.h"
@@ -107,23 +108,26 @@ static int gerar_amostras(const EdgeList *el, const Opcoes *op)
 }
 
 /*
- * Medição de cada execução de --algo (#25), como fixado no protocolo da
+ * Medição de cada execução de --algo (#25, RF03), como fixado no protocolo da
  * Metodologia do artigo (#26):
- *  - tempo: só o algoritmo; leitura, remapeamento e construção ficam fora;
- *  - memória: pico do memtrack entre o início da construção do grafo e o fim
- *    do algoritmo. Quem executa chama mt_reset_peak() antes de graph_build e
- *    lê mt_peak_bytes() assim que o algoritmo termina.
- * Cada execução acrescenta uma linha a op->log.
+ *   tempo_ms    só o algoritmo, sem a leitura e a montagem do grafo;
+ *   memoria_kb  pico do memtrack da montagem do grafo até o fim do algoritmo,
+ *               descontado o que já existia antes (o grafo entra na conta,
+ *               porque é o que diferencia lista de matriz).
+ * Quem executa chama mt_reset_peak() e guarda mt_current_bytes() antes de
+ * graph_build, e lê mt_peak_bytes() assim que o algoritmo termina.
+ * Cada execução acrescenta uma linha a op->log; devolve 0 se não conseguiu.
  */
-static int registrar(const Opcoes *op, const Graph *g, double tempo_ms, size_t pico_bytes)
+static int registrar(const Opcoes *op, const Graph *g, const char *algoritmo, double tempo_ms,
+                     size_t pico_bytes, size_t base_bytes)
 {
-    double memoria_kb = (double)pico_bytes / 1024.0;
-    printf("  tempo: %.3f ms, memória: %.1f KB (execução %u)\n", tempo_ms, memoria_kb,
+    double memoria_kb = (double)(pico_bytes - base_bytes) / 1024.0;
+    printf("  tempo: %.3f ms | memória: %.1f KB (execução %u)\n", tempo_ms, memoria_kb,
            op->execucao);
 
     LogRegistro r = {op->entrada, graph_num_vertices(g), graph_num_edges(g),
-                     graph_rep_name(graph_rep(g)), cli_nome_algoritmo(op->algoritmo),
-                     tempo_ms, memoria_kb, op->execucao};
+                     graph_rep_name(graph_rep(g)), algoritmo, tempo_ms, memoria_kb,
+                     op->execucao};
     if (log_registrar(op->log, &r) != LOG_OK) {
         fprintf(stderr, "erro: não foi possível gravar em '%s' (a pasta existe?)\n", op->log);
         return 0;
@@ -156,6 +160,7 @@ static int executar_bfs(const EdgeList *el, const Opcoes *op)
     idmap_iniciar(&ids);
     Graph *g;
     mt_reset_peak();
+    size_t base = mt_current_bytes();
     if (graph_build(el, &ids, rep, GRAPH_DIRECTED, &g) != GRAPH_OK) {
         fprintf(stderr, "erro: memória insuficiente para montar o grafo como %s\n",
                 graph_rep_name(rep));
@@ -171,16 +176,16 @@ static int executar_bfs(const EdgeList *el, const Opcoes *op)
         fprintf(stderr, "erro: o vértice %llu não existe no grafo\n", op->origem);
         goto fim;
     }
-    Timer *t = timer_criar();
-    if (!t) {
+    Timer *cron = timer_criar();
+    if (!cron) {
         fprintf(stderr, "erro: memória insuficiente para o cronômetro\n");
         goto fim;
     }
-    timer_iniciar(t);
+    timer_iniciar(cron);
     BfsStatus bs = bfs_executar(g, origem, &r);
-    double ms = timer_parar_ms(t);
+    double ms = timer_parar_ms(cron);
     size_t pico = mt_peak_bytes();
-    timer_destruir(t);
+    timer_destruir(cron);
     if (bs != BFS_OK) {
         fprintf(stderr, "erro: memória insuficiente para o BFS\n");
         goto fim;
@@ -202,7 +207,7 @@ static int executar_bfs(const EdgeList *el, const Opcoes *op)
     for (size_t d = 1; d <= r.dist_max; d++)
         printf("  %zu salto(s): %zu vértices\n", d, hist[d]);
 
-    codigo = registrar(op, g, ms, pico) ? 0 : 1;
+    codigo = registrar(op, g, "bfs", ms, pico, base) ? 0 : 1;
     if (op->saida) {
         FILE *f = fopen(op->saida, "w");
         if (!f) {
@@ -275,6 +280,7 @@ static int executar_separacao(const EdgeList *el, const Opcoes *op)
     idmap_iniciar(&ids);
     Graph *g;
     mt_reset_peak();
+    size_t base = mt_current_bytes();
     if (graph_build(el, &ids, rep, GRAPH_DIRECTED, &g) != GRAPH_OK) {
         fprintf(stderr, "erro: memória insuficiente para montar o grafo como %s\n",
                 graph_rep_name(rep));
@@ -282,8 +288,8 @@ static int executar_separacao(const EdgeList *el, const Opcoes *op)
         return 1;
     }
 
-    Timer *t = timer_criar();
-    if (!t) {
+    Timer *cron = timer_criar();
+    if (!cron) {
         fprintf(stderr, "erro: memória insuficiente para o cronômetro\n");
         graph_destroy(g);
         idmap_liberar(&ids);
@@ -291,12 +297,12 @@ static int executar_separacao(const EdgeList *el, const Opcoes *op)
     }
     /* o cálculo exato, feito à parte nas amostras pequenas, fica fora da medição */
     SeparacaoResultado r;
-    timer_iniciar(t);
+    timer_iniciar(cron);
     SeparacaoStatus st = separacao_analisar(g, SEPARACAO_FRACAO_PADRAO, SEPARACAO_PERFIS_PADRAO,
                                             op->semente_rng, &r);
-    double ms = timer_parar_ms(t);
+    double ms = timer_parar_ms(cron);
     size_t pico = mt_peak_bytes();
-    timer_destruir(t);
+    timer_destruir(cron);
     if (st != SEPARACAO_OK) {
         fprintf(stderr, "erro: %s\n", st == SEPARACAO_ERRO_MEMORIA
                                           ? "memória insuficiente para a análise"
@@ -336,12 +342,114 @@ static int executar_separacao(const EdgeList *el, const Opcoes *op)
     }
     if (op->saida && !gravar_separacao(op->saida, &r, &ids))
         codigo = 1;
-    if (!registrar(op, g, ms, pico))
+    if (!registrar(op, g, "separacao", ms, pico, base))
         codigo = 1;
 
     separacao_liberar(&r);
     graph_destroy(g);
     idmap_liberar(&ids);
+    return codigo;
+}
+
+/* --algo componentes (#18): fortemente conexos (visão direcionada), que
+ * respondem quem alcança quem, e fracamente conexos (visão simetrizada), que
+ * respondem se a rede é uma peça só. Cada um vira uma linha no log.
+ * Devolve o código de saída do programa. */
+static int executar_componentes(const EdgeList *el, const Opcoes *op)
+{
+    static const struct {
+        GraphView view;
+        const char *algoritmo;   /* nome no log */
+        const char *titulo;
+        const char *unitarios;   /* o que um componente unitário significa */
+    } TIPOS[] = {
+        {GRAPH_DIRECTED, "componentes_fortes", "fortemente conexos",
+         "usuários cujo conteúdo não volta a circular até eles"},
+        {GRAPH_SYMMETRIC, "componentes_fracos", "fracamente conexos",
+         "usuários sem nenhuma ligação"},
+    };
+    GraphRep rep = op->estrutura == ESTRUTURA_MATRIZ ? GRAPH_MATRIX : GRAPH_LIST;
+
+    FILE *csv = NULL;
+    if (op->saida) {
+        csv = fopen(op->saida, "w");
+        if (!csv) {
+            fprintf(stderr, "erro: não foi possível gravar '%s'\n", op->saida);
+            return 1;
+        }
+        fprintf(csv, "tipo,tamanho,componentes\n");
+    }
+
+    int codigo = 0;
+    for (size_t t = 0; t < sizeof TIPOS / sizeof TIPOS[0] && codigo != 1; t++) {
+        mt_reset_peak();
+        size_t base = mt_current_bytes();
+
+        IdMap ids;
+        idmap_iniciar(&ids);
+        Graph *g;
+        if (graph_build(el, &ids, rep, TIPOS[t].view, &g) != GRAPH_OK) {
+            fprintf(stderr, "erro: memória insuficiente para montar o grafo como %s\n",
+                    graph_rep_name(rep));
+            idmap_liberar(&ids);
+            codigo = 1;
+            break;
+        }
+
+        Timer *cron = timer_criar();
+        ComponentesResultado r;
+        ComponentesStatus st = COMPONENTES_ERRO_MEMORIA;
+        double ms = 0;
+        if (cron) {
+            timer_iniciar(cron);
+            st = componentes_executar(g, &r);
+            ms = timer_parar_ms(cron);
+            timer_destruir(cron);
+        }
+        size_t pico = mt_peak_bytes();
+
+        ComponentesFaixa *faixas = NULL;
+        size_t k = 0;
+        if (st != COMPONENTES_OK || componentes_distribuicao(&r, &faixas, &k) != COMPONENTES_OK) {
+            fprintf(stderr, "erro: memória insuficiente para os componentes\n");
+            if (st == COMPONENTES_OK)
+                componentes_liberar(&r);
+            graph_destroy(g);
+            idmap_liberar(&ids);
+            codigo = 1;
+            break;
+        }
+
+        size_t n = graph_num_vertices(g);
+        printf("Componentes %s (%s, visão %s)\n", TIPOS[t].titulo, graph_rep_name(rep),
+               graph_view_name(TIPOS[t].view));
+        printf("  componentes: %zu\n", r.num_componentes);
+        printf("  gigante: %zu de %zu vértices (%.2f%%)\n", r.tamanho_gigante, n,
+               n ? 100.0 * (double)r.tamanho_gigante / (double)n : 0.0);
+        printf("  unitários: %zu (%s)\n", r.unitarios, TIPOS[t].unitarios);
+        printf("  tamanhos:");
+        for (size_t i = 0; i < k && i < 6; i++)
+            printf("%s %zu (x%zu)", i ? "," : "", faixas[i].tamanho, faixas[i].quantidade);
+        printf("%s\n", k > 6 ? ", ..." : "");
+
+        if (csv)
+            for (size_t i = 0; i < k; i++)
+                fprintf(csv, "%s,%zu,%zu\n", t == 0 ? "fortes" : "fracos", faixas[i].tamanho,
+                        faixas[i].quantidade);
+
+        if (!registrar(op, g, TIPOS[t].algoritmo, ms, pico, base))
+            codigo = 1;
+
+        mt_free(faixas);
+        componentes_liberar(&r);
+        graph_destroy(g);
+        idmap_liberar(&ids);
+    }
+
+    if (csv && fclose(csv) != 0 && codigo == 0) {
+        fprintf(stderr, "erro: não foi possível gravar '%s'\n", op->saida);
+        codigo = 1;
+    }
     return codigo;
 }
 
@@ -385,6 +493,8 @@ int main(int argc, char **argv)
         codigo = executar_bfs(&el, &op);
     } else if (op.algoritmo == ALGO_SEPARACAO) {
         codigo = executar_separacao(&el, &op);
+    } else if (op.algoritmo == ALGO_COMPONENTES) {
+        codigo = executar_componentes(&el, &op);
     } else if (op.algoritmo != ALGO_NENHUM) {
         fprintf(stderr, "o algoritmo '%s' ainda não foi implementado\n",
                 cli_nome_algoritmo(op.algoritmo));

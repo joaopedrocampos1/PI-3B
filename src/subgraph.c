@@ -1,4 +1,5 @@
 #include "subgraph.h"
+#include "memtrack.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -40,11 +41,11 @@ AmostraStatus subgraph_preparar(Amostrador *a, const EdgeList *el)
             goto sem_memoria;
 
     size_t V = a->ids.n;
-    a->inicio = calloc(V + 1, sizeof *a->inicio);
-    a->vizinhos = malloc((2 * el->n + 1) * sizeof *a->vizinhos);
-    size_t *cursor = malloc((V + 1) * sizeof *cursor);
+    a->inicio = mt_calloc(V + 1, sizeof *a->inicio);
+    a->vizinhos = mt_malloc((2 * el->n + 1) * sizeof *a->vizinhos);
+    size_t *cursor = mt_malloc((V + 1) * sizeof *cursor);
     if (!a->inicio || !a->vizinhos || !cursor) {
-        free(cursor);
+        mt_free(cursor);
         goto sem_memoria;
     }
 
@@ -66,7 +67,7 @@ AmostraStatus subgraph_preparar(Amostrador *a, const EdgeList *el)
         a->vizinhos[cursor[u]++] = v;
         a->vizinhos[cursor[v]++] = u;
     }
-    free(cursor);
+    mt_free(cursor);
 
     ordenar_sem_repeticao(a);
     return AMOSTRA_OK;
@@ -85,7 +86,7 @@ static AmostraStatus extrair_induzido(const Amostrador *a, const unsigned char *
 
     for (int passo = 0; passo < 2; passo++) {
         if (passo == 1) {
-            saida->arestas = malloc((total ? total : 1) * sizeof *saida->arestas);
+            saida->arestas = mt_malloc((total ? total : 1) * sizeof *saida->arestas);
             if (!saida->arestas)
                 return AMOSTRA_ERRO_MEMORIA;
         }
@@ -115,11 +116,11 @@ AmostraStatus subgraph_bfs(const Amostrador *a, unsigned long long semente, size
         return AMOSTRA_OK;
 
     size_t V = a->ids.n;
-    unsigned char *marcado = calloc(V, 1);
-    size_t *fila = malloc(n * sizeof *fila);
+    unsigned char *marcado = mt_calloc(V, 1);
+    size_t *fila = mt_malloc(n * sizeof *fila);
     if (!marcado || !fila) {
-        free(marcado);
-        free(fila);
+        mt_free(marcado);
+        mt_free(fila);
         return AMOSTRA_ERRO_MEMORIA;
     }
 
@@ -142,8 +143,8 @@ AmostraStatus subgraph_bfs(const Amostrador *a, unsigned long long semente, size
                                        : extrair_induzido(a, marcado, saida);
     if (st != AMOSTRA_OK)
         edgelist_liberar(saida);
-    free(marcado);
-    free(fila);
+    mt_free(marcado);
+    mt_free(fila);
     return st;
 }
 
@@ -165,7 +166,7 @@ AmostraStatus subgraph_sortear_sementes(const Amostrador *a, unsigned long long 
     if (k > V)
         return AMOSTRA_SEMENTES_INSUFICIENTES;
 
-    size_t *perm = malloc((V ? V : 1) * sizeof *perm);
+    size_t *perm = mt_malloc((V ? V : 1) * sizeof *perm);
     if (!perm)
         return AMOSTRA_ERRO_MEMORIA;
     for (size_t v = 0; v < V; v++)
@@ -181,14 +182,14 @@ AmostraStatus subgraph_sortear_sementes(const Amostrador *a, unsigned long long 
         sementes[i] = idmap_original(&a->ids, perm[i]);
     }
 
-    free(perm);
+    mt_free(perm);
     return AMOSTRA_OK;
 }
 
 void subgraph_liberar(Amostrador *a)
 {
     idmap_liberar(&a->ids);
-    free(a->inicio);
-    free(a->vizinhos);
+    mt_free(a->inicio);
+    mt_free(a->vizinhos);
     memset(a, 0, sizeof *a);
 }
