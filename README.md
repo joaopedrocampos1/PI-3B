@@ -200,6 +200,8 @@ aparece como pulado e os demais rodam normalmente.
 | `--output` | Arquivo de saída dos resultados |
 | `--amostrar` | Pasta onde gravar as amostras: 3 sementes sorteadas × N = 100, 250, 500 e 1.000 |
 | `--semente-rng` | Semente do sorteio das amostras. Padrão: `2026`, que gera os arquivos versionados |
+| `--execucao` | Número desta execução, gravado no log. A 1 é o aquecimento. Padrão: `1` |
+| `--log` | CSV onde cada execução de `--algo` acrescenta uma linha. Padrão: `results/log.csv` |
 | `--help` | Mostra a ajuda |
 
 Toda opção aceita também a forma `--opcao=valor`.
@@ -224,9 +226,22 @@ ainda não foi implementado, ou uma amostra maior que o componente da semente.
 
 O BFS percorre a visão direcionada, no sentido das arestas. Os demais algoritmos de
 `--algo` ainda não estão ligados: o programa aceita o nome e responde que ele ainda não
-foi implementado. Quando a instrumentação (RF03) estiver pronta, toda
-execução de algoritmo vai acrescentar uma linha a `results/log.csv` com timestamp,
-dataset, N, M, estrutura, algoritmo, tempo em ms, memória em KB e número da repetição.
+foi implementado.
+
+Toda execução de `--algo` acrescenta uma linha a `results/log.csv` (RF03), com as
+colunas `timestamp, dataset, N, M, estrutura, algoritmo, tempo_ms, memoria_kb,
+execucao_num`. Seguindo o protocolo do artigo, o tempo cobre só o algoritmo, e a
+memória é o pico do memtrack entre o início da construção do grafo e o fim do
+algoritmo. Como cada execução é um processo separado, o número da execução vem de
+`--execucao`:
+
+```bash
+# 11 execuções da mesma configuração; a 1ª é o aquecimento, descartado na análise
+for e in $(seq 1 11); do
+    ./bin/grafos --input data/samples/bfs_307642294_n1000.txt --algo bfs \
+                 --source 307642294 --struct lista --execucao $e
+done
+```
 
 ## Formato de entrada
 
