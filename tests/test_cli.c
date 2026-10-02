@@ -52,6 +52,16 @@ static void so_entrada_usa_padroes(void)
     CHECK(op.saida == NULL);
     CHECK(op.pasta_amostras == NULL);
     CHECK(op.semente_rng == 2026ULL);
+    CHECK(op.execucao == 1);
+    CHECK(op.log && strcmp(op.log, "results/log.csv") == 0);
+}
+
+static void execucao_e_log(void)
+{
+    Opcoes op;
+    CHECK(ler(&op, "--input", "d.txt", "--execucao", "11", "--log=bin/x.csv", NULL) == CLI_OK);
+    CHECK(op.execucao == 11);
+    CHECK(op.log && strcmp(op.log, "bin/x.csv") == 0);
 }
 
 static void todas_as_opcoes_separadas(void)
@@ -131,6 +141,9 @@ static void argumentos_invalidos(void)
         {{"--input", "d", "--source", "+1", NULL}, "+1"},
         {{"--input", "d", "--source", "99999999999999999999999", NULL}, "--source"},
         {{"--input", "d", "--semente-rng", "x", NULL}, "--semente-rng"},
+        {{"--input", "d", "--execucao", "0", NULL}, "--execucao"},
+        {{"--input", "d", "--execucao", "4294967296", NULL}, "--execucao"},  /* > UINT_MAX */
+        {{"--input", "d", "--log", NULL}, "--log"},
         {{"--input", "d", "--verbose", NULL}, "--verbose"},
         {{"--inputx=d", NULL}, "--inputx"},                              /* nome mais longo */
         {{"--inp", "d", NULL}, "--inp"},                                  /* abreviação */
@@ -170,6 +183,7 @@ int main(void)
     argumentos_invalidos();
     ajuda();
     so_entrada_usa_padroes();
+    execucao_e_log();
     todas_as_opcoes_separadas();
     todas_as_opcoes_com_igual();
     modo_amostragem();
