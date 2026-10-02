@@ -36,6 +36,10 @@ typedef struct {
 
 #define DOT_COR_DESTAQUE "#e34948"
 
+/* Acima deste número de vértices, o arquivo pede o layout sfdp (por forças)
+ * no lugar do layout em camadas, que fica ilegível em redes densas. */
+#define DOT_LIMITE_CAMADAS 30
+
 typedef enum {
     DOT_OK = 0,
     DOT_ERRO_ARQUIVO,                /* não abriu ou não gravou (a pasta existe?) */

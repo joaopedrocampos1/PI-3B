@@ -230,6 +230,35 @@ static void destino_invalido(GraphRep rep)
     descarregar(&c);
 }
 
+/* Até 30 vértices, o layout padrão (camadas); acima, o arquivo pede o sfdp,
+ * por forças, porque o desenho em camadas de uma rede densa fica ilegível e
+ * leva dezenas de segundos para sair. */
+static void layout_por_tamanho(GraphRep rep)
+{
+    Carregado c = carregar("1 2\n", rep, GRAPH_DIRECTED);
+    CHECK(dot_gravar(SAIDA, c.g, &c.ids, NULL, NULL) == DOT_OK);
+    char *s = ler_saida();
+    CHECK(s && strstr(s, "layout=") == NULL);
+    free(s);
+    descarregar(&c);
+
+    for (size_t n = 30; n <= 31; n++) {
+        Graph *g;
+        IdMap ids;
+        idmap_iniciar(&ids);
+        size_t i;
+        for (unsigned long long id = 0; id < n; id++)
+            idmap_inserir(&ids, id, &i);
+        graph_create(n, rep, GRAPH_SYMMETRIC, &g);
+        CHECK(dot_gravar(SAIDA, g, &ids, NULL, NULL) == DOT_OK);
+        s = ler_saida();
+        CHECK(s && (strstr(s, "layout=sfdp") != NULL) == (n > 30));
+        free(s);
+        graph_destroy(g);
+        idmap_liberar(&ids);
+    }
+}
+
 static void rodar(GraphRep rep)
 {
     direcionada(rep);
@@ -239,6 +268,7 @@ static void rodar(GraphRep rep)
     destaque_respeita_sentido(rep);
     titulo_escapado(rep);
     destino_invalido(rep);
+    layout_por_tamanho(rep);
 }
 
 int main(void)

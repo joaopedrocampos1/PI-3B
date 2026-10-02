@@ -64,6 +64,11 @@ DotStatus dot_gravar(const char *caminho, const Graph *g, const IdMap *ids,
     }
 
     fprintf(f, "%s G {\n", sem_sentido ? "graph" : "digraph");
+    /* Acima de algumas dezenas de vértices, o layout em camadas (o padrão do
+     * Graphviz) fica ilegível e lento numa rede densa; o sfdp, por forças, não.
+     * Declarado no arquivo, vale com o comando comum: dot -Tpng arq.dot */
+    if (n > DOT_LIMITE_CAMADAS)
+        fputs("  layout=sfdp;\n  overlap=prism;\n", f);
     if (titulo) {
         fputs("  label=", f);
         escrever_texto(f, titulo);
