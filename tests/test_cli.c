@@ -151,6 +151,7 @@ static void argumentos_invalidos(void)
         {{"--input", "d", "extra", NULL}, "extra"},
         {{"-input", "d", NULL}, "-input"},
         {{"--input", "d", "--amostrar", "p", "--algo", "bfs", NULL}, "--amostrar"},
+        {{"--input", "d", "--amostrar", "p", "--dot", "g.dot", NULL}, "--dot"},
     };
 
     for (size_t i = 0; i < sizeof casos / sizeof casos[0]; i++) {
@@ -178,8 +179,21 @@ static void ajuda(void)
     CHECK(ler(&op, "--input", "d.txt", "--help", NULL) == CLI_AJUDA);
 }
 
+/* --dot: vazio por padrão, nas duas formas, com ou sem --algo. */
+static void opcao_dot(void)
+{
+    Opcoes op;
+    CHECK(ler(&op, "--input", "d.txt", NULL) == CLI_OK);
+    CHECK(op.dot == NULL);
+    CHECK(ler(&op, "--input", "d.txt", "--algo", "bipartido", "--dot", "results/dot/b.dot", NULL) == CLI_OK);
+    CHECK(op.dot && strcmp(op.dot, "results/dot/b.dot") == 0);
+    CHECK(ler(&op, "--input=d.txt", "--dot=g.dot", NULL) == CLI_OK);
+    CHECK(op.dot && strcmp(op.dot, "g.dot") == 0 && op.algoritmo == ALGO_NENHUM);
+}
+
 int main(void)
 {
+    opcao_dot();
     argumentos_invalidos();
     ajuda();
     so_entrada_usa_padroes();

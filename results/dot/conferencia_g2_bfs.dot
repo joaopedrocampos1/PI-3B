@@ -1,0 +1,16 @@
+digraph G {
+  label="BFS a partir de 0: alcançados e árvore do BFS";
+  labelloc=t;
+  node [shape=circle, fontsize=9, fontname="Helvetica", color="#52514e"];
+  edge [color="#8a8984", arrowsize=0.6];
+  "0" [style=filled, fillcolor="#2a78d6", penwidth=3, color="#e34948"];
+  "1" [style=filled, fillcolor="#2a78d6"];
+  "2" [style=filled, fillcolor="#2a78d6"];
+  "3" [style=filled, fillcolor="#2a78d6"];
+  "4" [style=filled, fillcolor="#2a78d6"];
+  "0" -> "1" [color="#e34948", penwidth=2.5];
+  "1" -> "2" [color="#e34948", penwidth=2.5];
+  "2" -> "3" [color="#e34948", penwidth=2.5];
+  "3" -> "0";
+  "3" -> "4" [color="#e34948", penwidth=2.5];
+}

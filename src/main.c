@@ -4,6 +4,7 @@
 #include "componentes.h"
 #include "cycles.h"
 #include "dfs.h"
+#include "dot.h"
 #include "edgelist.h"
 #include "graph.h"
 #include "idmap.h"
@@ -150,6 +151,209 @@ static void histograma(const BfsResultado *r, size_t *hist)
             hist[r->dist[v]]++;
 }
 
+/*
+ * --dot (Graphviz): o grafo da visão usada pelo algoritmo, com o resultado
+ * destacado. As cores de categoria são as da paleta categórica validada; o
+ * vermelho (DOT_COR_DESTAQUE) fica reservado para o que o algoritmo aponta.
+ * O desenho é feito depois de registrar(), então não entra no tempo nem na
+ * memória medidos.
+ */
+static const char *const PALETA[] = {"#2a78d6", "#eb6834", "#1baf7a", "#eda100",
+                                     "#e87ba4", "#008300", "#4a3aa7"};
+#define NUM_PALETA (sizeof PALETA / sizeof PALETA[0])
+/* vetor, e não texto literal: o endereço é único, então dá para comparar ponteiros */
+static const char COR_OUTROS[] = "#c3c2b7";
+
+typedef struct {
+    const char **cor;
+    unsigned char *destaque;
+    DotAresta *arestas;
+    size_t num_arestas;
+} Desenho;
+
+static void desenho_liberar(Desenho *d)
+{
+    mt_free(d->cor);
+    mt_free(d->destaque);
+    mt_free(d->arestas);
+}
+
+static int desenho_iniciar(Desenho *d, size_t n, size_t max_arestas)
+{
+    d->cor = mt_calloc(n ? n : 1, sizeof *d->cor);
+    d->destaque = mt_calloc(n ? n : 1, 1);
+    d->arestas = mt_malloc((max_arestas ? max_arestas : 1) * sizeof *d->arestas);
+    d->num_arestas = 0;
+    if (d->cor && d->destaque && d->arestas)
+        return 1;
+    desenho_liberar(d);
+    fprintf(stderr, "erro: memória insuficiente para o desenho\n");
+    return 0;
+}
+
+static void desenho_aresta(Desenho *d, size_t u, size_t v)
+{
+    d->arestas[d->num_arestas].u = u;
+    d->arestas[d->num_arestas].v = v;
+    d->num_arestas++;
+}
+
+/* Grava op->dot com o desenho (NULL = só o grafo) e o libera. Devolve 0 se
+ * falhar, já avisando. */
+static int gravar_dot(const Opcoes *op, const Graph *g, const IdMap *ids, Desenho *d,
+                      const char *titulo)
+{
+    size_t n = graph_num_vertices(g);
+    if (n > 1000)
+        fprintf(stderr, "aviso: %zu vértices; o desenho em '%s' só é legível em grafos pequenos\n",
+                n, op->dot);
+    DotEstilo e = {NULL, NULL, NULL, 0};
+    if (d) {
+        e.cor = d->cor;
+        e.destaque = d->destaque;
+        e.arestas = d->arestas;
+        e.num_arestas = d->num_arestas;
+    }
+    int ok = dot_gravar(op->dot, g, ids, &e, titulo) == DOT_OK;
+    if (ok)
+        printf("  desenho (Graphviz): %s\n", op->dot);
+    else
+        fprintf(stderr, "erro: não foi possível gravar '%s'\n", op->dot);
+    if (d)
+        desenho_liberar(d);
+    return ok;
+}
+
+/* BFS: alcançados em azul, origem destacada, árvore do BFS em vermelho. */
+static int desenhar_bfs(const Opcoes *op, const Graph *g, const IdMap *ids,
+                        const BfsResultado *r, size_t origem)
+{
+    if (!op->dot)
+        return 1;
+    Desenho d;
+    if (!desenho_iniciar(&d, r->n, r->n))
+        return 0;
+    for (size_t v = 0; v < r->n; v++)
+        if (r->visitado[v]) {
+            d.cor[v] = PALETA[0];
+            if (r->pred[v] != BFS_NENHUM)
+                desenho_aresta(&d, r->pred[v], v);
+        }
+    d.destaque[origem] = 1;
+    char titulo[128];
+    snprintf(titulo, sizeof titulo, "BFS a partir de %llu: alcançados e árvore do BFS",
+             idmap_original(ids, origem));
+    return gravar_dot(op, g, ids, &d, titulo);
+}
+
+/* DFS: a árvore da origem em azul (pelo teorema dos parênteses, v está nela
+ * se o seu intervalo cabe no da origem), origem destacada. */
+static int desenhar_dfs(const Opcoes *op, const Graph *g, const IdMap *ids,
+                        const DfsResultado *r, size_t origem)
+{
+    if (!op->dot)
+        return 1;
+    Desenho d;
+    if (!desenho_iniciar(&d, r->n, 0))
+        return 0;
+    for (size_t v = 0; v < r->n; v++)
+        if (r->descoberta[origem] <= r->descoberta[v] && r->finalizacao[v] <= r->finalizacao[origem])
+            d.cor[v] = PALETA[0];
+    d.destaque[origem] = 1;
+    char titulo[128];
+    snprintf(titulo, sizeof titulo, "DFS a partir de %llu: árvore da origem",
+             idmap_original(ids, origem));
+    return gravar_dot(op, g, ids, &d, titulo);
+}
+
+/* Componentes: os maiores (com mais de um vértice), cada um numa cor da
+ * paleta; os demais em cinza; os unitários sem cor. */
+static int desenhar_componentes(const Opcoes *op, const Graph *g, const IdMap *ids,
+                                const ComponentesResultado *r, const char *tipo)
+{
+    if (!op->dot)
+        return 1;
+    Desenho d;
+    const char **cor_comp = mt_calloc(r->num_componentes ? r->num_componentes : 1, sizeof *cor_comp);
+    if (!cor_comp || !desenho_iniciar(&d, r->n, 0)) {
+        mt_free(cor_comp);
+        return 0;
+    }
+    for (size_t c = 0; c < r->num_componentes; c++)
+        if (r->tamanho[c] > 1)
+            cor_comp[c] = COR_OUTROS;
+    for (size_t i = 0; i < NUM_PALETA; i++) {   /* os maiores, do maior para o menor */
+        size_t melhor = SIZE_MAX;
+        for (size_t c = 0; c < r->num_componentes; c++)
+            if (cor_comp[c] == COR_OUTROS && (melhor == SIZE_MAX || r->tamanho[c] > r->tamanho[melhor]))
+                melhor = c;
+        if (melhor == SIZE_MAX)
+            break;
+        cor_comp[melhor] = PALETA[i];
+    }
+    for (size_t v = 0; v < r->n; v++)
+        d.cor[v] = cor_comp[r->componente[v]];
+    mt_free(cor_comp);
+    char titulo[160];
+    snprintf(titulo, sizeof titulo, "Componentes %s: os %zu maiores em cores, os demais em cinza",
+             tipo, NUM_PALETA);
+    return gravar_dot(op, g, ids, &d, titulo);
+}
+
+/* Ciclos: o ciclo de exemplo em vermelho. */
+static int desenhar_ciclos(const Opcoes *op, const Graph *g, const IdMap *ids,
+                           const CiclosResultado *r)
+{
+    if (!op->dot)
+        return 1;
+    Desenho d;
+    if (!desenho_iniciar(&d, graph_num_vertices(g), r->tam_ciclo))
+        return 0;
+    for (size_t i = 0; i < r->tam_ciclo; i++) {
+        d.destaque[r->ciclo[i]] = 1;
+        desenho_aresta(&d, r->ciclo[i], r->ciclo[(i + 1) % r->tam_ciclo]);
+    }
+    return gravar_dot(op, g, ids, &d,
+                      r->tem_ciclo ? "Ciclos: o ciclo de exemplo em vermelho" : "Ciclos: nenhum");
+}
+
+/* Bipartição: os dois lados em duas cores; se não for bipartido, o ciclo
+ * ímpar em vermelho. */
+static int desenhar_bipartido(const Opcoes *op, const Graph *g, const IdMap *ids,
+                              const BipartidoResultado *r)
+{
+    if (!op->dot)
+        return 1;
+    Desenho d;
+    if (!desenho_iniciar(&d, r->n, r->tam_ciclo))
+        return 0;
+    for (size_t v = 0; v < r->n; v++)
+        d.cor[v] = PALETA[r->cor[v]];
+    for (size_t i = 0; i < r->tam_ciclo; i++) {
+        d.destaque[r->ciclo_impar[i]] = 1;
+        desenho_aresta(&d, r->ciclo_impar[i], r->ciclo_impar[(i + 1) % r->tam_ciclo]);
+    }
+    return gravar_dot(op, g, ids, &d,
+                      r->bipartido ? "Bipartição: bipartido, um lado em cada cor"
+                                   : "Bipartição: não bipartido; ciclo ímpar em vermelho");
+}
+
+/* Articulação: vértices de articulação com borda vermelha, pontes em vermelho. */
+static int desenhar_articulacao(const Opcoes *op, const Graph *g, const IdMap *ids,
+                                const TarjanResultado *r)
+{
+    if (!op->dot)
+        return 1;
+    Desenho d;
+    if (!desenho_iniciar(&d, r->n, r->num_pontes))
+        return 0;
+    for (size_t v = 0; v < r->n; v++)
+        d.destaque[v] = r->eh_articulacao[v];
+    for (size_t i = 0; i < r->num_pontes; i++)
+        desenho_aresta(&d, r->pontes[i].u, r->pontes[i].v);
+    return gravar_dot(op, g, ids, &d, "Pontes e vértices de articulação em vermelho");
+}
+
 /* --algo bfs: BFS na visão direcionada a partir de --source. Mostra o alcance
  * e, com --output, grava o histograma de distâncias em CSV. Devolve o código
  * de saída do programa. */
@@ -212,6 +416,8 @@ static int executar_bfs(const EdgeList *el, const Opcoes *op)
         printf("  %zu salto(s): %zu vértices\n", d, hist[d]);
 
     codigo = registrar(op, g, "bfs", ms, pico, base) ? 0 : 1;
+    if (!desenhar_bfs(op, g, &ids, &r, origem))
+        codigo = 1;
     if (op->saida) {
         FILE *f = fopen(op->saida, "w");
         if (!f) {
@@ -443,6 +649,8 @@ static int executar_componentes(const EdgeList *el, const Opcoes *op)
 
         if (!registrar(op, g, TIPOS[t].algoritmo, ms, pico, base))
             codigo = 1;
+        if (t == 0 && !desenhar_componentes(op, g, &ids, &r, TIPOS[t].titulo))
+            codigo = 1;
 
         mt_free(faixas);
         componentes_liberar(&r);
@@ -483,6 +691,20 @@ static void imprimir_vertices(const IdMap *ids, const size_t *v, size_t k, size_
         printf("%s%llu", i ? sep : "", idmap_original(ids, v[i]));
     if (k > max)
         printf("%s... (%zu no total)", sep, k);
+}
+
+/* Sem --algo, com --dot: só o grafo, na visão direcionada. */
+static int desenhar_grafo(const EdgeList *el, const Opcoes *op)
+{
+    IdMap ids;
+    Graph *g;
+    size_t base;
+    if (!montar_grafo(el, op, GRAPH_DIRECTED, &ids, &g, &base))
+        return 1;
+    int ok = gravar_dot(op, g, &ids, NULL, NULL);
+    graph_destroy(g);
+    idmap_liberar(&ids);
+    return ok ? 0 : 1;
 }
 
 /* --algo dfs (#15): floresta da DFS na visão direcionada. A primeira árvore
@@ -527,6 +749,8 @@ static int executar_dfs(const EdgeList *el, const Opcoes *op)
     printf("  árvores na floresta da DFS: %zu\n", r.arvores);
 
     codigo = registrar(op, g, "dfs", ms, pico, base) ? 0 : 1;
+    if (!desenhar_dfs(op, g, &ids, &r, origem))
+        codigo = 1;
     if (op->saida) {
         FILE *f = fopen(op->saida, "w");
         if (!f) {
@@ -586,6 +810,8 @@ static int executar_ciclos(const EdgeList *el, const Opcoes *op)
     }
 
     codigo = registrar(op, g, "ciclos", ms, pico, base) ? 0 : 1;
+    if (!desenhar_ciclos(op, g, &ids, &r))
+        codigo = 1;
     if (op->saida) {
         FILE *f = fopen(op->saida, "w");
         if (!f) {
@@ -643,6 +869,8 @@ static int executar_bipartido(const EdgeList *el, const Opcoes *op)
     }
 
     codigo = registrar(op, g, "bipartido", ms, pico, base) ? 0 : 1;
+    if (!desenhar_bipartido(op, g, &ids, &r))
+        codigo = 1;
     if (op->saida) {
         FILE *f = fopen(op->saida, "w");
         if (!f) {
@@ -702,6 +930,8 @@ static int executar_articulacao(const EdgeList *el, const Opcoes *op)
                r.articulacoes[i].pedacos);
 
     codigo = registrar(op, g, "articulacao", ms, pico, base) ? 0 : 1;
+    if (!desenhar_articulacao(op, g, &ids, &r))
+        codigo = 1;
     if (op->saida) {
         FILE *f = fopen(op->saida, "w");
         if (!f) {
@@ -761,6 +991,8 @@ int main(int argc, char **argv)
     } else if (op.algoritmo == ALGO_BFS) {
         codigo = executar_bfs(&el, &op);
     } else if (op.algoritmo == ALGO_SEPARACAO) {
+        if (op.dot)
+            fprintf(stderr, "aviso: --dot não é usado com --algo separacao\n");
         codigo = executar_separacao(&el, &op);
     } else if (op.algoritmo == ALGO_COMPONENTES) {
         codigo = executar_componentes(&el, &op);
@@ -772,6 +1004,8 @@ int main(int argc, char **argv)
         codigo = executar_bipartido(&el, &op);
     } else if (op.algoritmo == ALGO_ARTICULACAO) {
         codigo = executar_articulacao(&el, &op);
+    } else if (op.algoritmo == ALGO_NENHUM && op.dot) {
+        codigo = desenhar_grafo(&el, &op);
     } else if (op.algoritmo != ALGO_NENHUM) {
         fprintf(stderr, "o algoritmo '%s' ainda não foi implementado\n",
                 cli_nome_algoritmo(op.algoritmo));

@@ -1,0 +1,16 @@
+graph G {
+  label="Bipartição: bipartido, um lado em cada cor";
+  labelloc=t;
+  node [shape=circle, fontsize=9, fontname="Helvetica", color="#52514e"];
+  edge [color="#8a8984", arrowsize=0.6];
+  "0" [style=filled, fillcolor="#2a78d6"];
+  "1" [style=filled, fillcolor="#eb6834"];
+  "2" [style=filled, fillcolor="#2a78d6"];
+  "3" [style=filled, fillcolor="#eb6834"];
+  "4" [style=filled, fillcolor="#2a78d6"];
+  "0" -- "1";
+  "0" -- "3";
+  "1" -- "2";
+  "2" -- "3";
+  "3" -- "4";
+}

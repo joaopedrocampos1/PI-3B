@@ -146,7 +146,7 @@ sem subpastas espelhadas.
 | `bfs.c` `separacao.c` `componentes.c` `bipartido.c` | buscas em largura, graus de separação, conectividade e bipartição | DEV3 |
 | `dfs.c` `cycles.c` `tarjan.c` | busca em profundidade e algoritmos estruturais | DEV4 |
 | `timer.c` `memtrack.c` `logger.c` | instrumentação de tempo, memória e log | DEV4 |
-| `cli.c` `main.c` | linha de comando e ligação dos módulos | — |
+| `cli.c` `main.c` `dot.c` | linha de comando, ligação dos módulos e exportação Graphviz | — |
 
 A separação por arquivo importa mais do que parece: com cinco pessoas commitando em
 paralelo por quatro semanas, cada um mexendo nos seus arquivos reduz conflito de merge.
@@ -155,21 +155,37 @@ revisão de mais de uma pessoa.
 
 ## Visualização
 
-> Planejada, ainda não implementada: `results/dot/` e `results/figs/` existem, mas o
-> programa ainda não exporta `.dot`.
+Com `--dot <arquivo>`, o programa grava o grafo em formato Graphviz, com o resultado do
+`--algo` destacado. Os desenhos versionados estão em `results/dot/`: os seis algoritmos
+sobre os dois grafos da conferência manual e sobre uma amostra de 100 vértices, cada
+`.dot` acompanhado do seu PNG.
 
-Os grafos serão exportados em formato Graphviz (`.dot`) para `results/dot/` e
-renderizados em lote por um script em `scripts/`.
+```bash
+./bin/grafos --input tests/grafos/conferencia_g1.txt --algo articulacao --dot g1.dot
+dot -Tpng g1.dot -o g1.png        # requer o Graphviz
+
+./scripts/gerar_desenhos.sh       # refaz todos os desenhos de results/dot/
+./scripts/render_dot.sh           # só renderiza os .dot que já existem
+```
+
+| `--algo` | O que o desenho destaca |
+|---|---|
+| `bfs` | origem com borda vermelha, alcançados em azul, árvore do BFS em vermelho |
+| `dfs` | origem com borda vermelha, árvore da origem em azul |
+| `componentes` | os sete maiores componentes fortemente conexos, um em cada cor; os demais em cinza; os unitários sem cor |
+| `ciclos` | o ciclo de exemplo em vermelho |
+| `bipartido` | os dois lados em azul e laranja; se não for bipartido, o ciclo ímpar em vermelho |
+| `articulacao` | vértices de articulação com borda vermelha, pontes em vermelho |
+| sem `--algo` | só o grafo, na visão direcionada |
+
+O desenho usa a visão do grafo do algoritmo: `digraph` na direcionada, `graph` (cada
+aresta uma vez) nas sem sentido. Ele é gravado depois da medição, então não entra no
+tempo nem na memória do log.
 
 A visualização só é legível em grafos pequenos: com mais de algumas centenas de
-vértices o resultado vira uma mancha. Ela é usada, portanto, nos subgrafos amostrados,
-nos casos de teste de resultado conhecido — onde a imagem serve como evidência de que
-o algoritmo acertou — e em vizinhanças específicas, como o entorno de um vértice de
-articulação, mostrando a fragmentação que sua remoção provoca.
-
-A exportação colore os vértices e arestas conforme o resultado do algoritmo executado:
-componentes conexos em cores distintas, as duas classes da bipartição em cores opostas,
-pontes destacadas.
+vértices o resultado vira uma mancha. Acima de 30 vértices, o próprio `.dot` pede o
+layout `sfdp`, por forças, no lugar do layout em camadas, que numa rede densa fica
+ilegível e leva dezenas de segundos para sair.
 
 ## Do zero à primeira execução
 
@@ -182,11 +198,12 @@ pontes destacadas.
   As 12 amostras do protocolo já vêm no repositório.
 - **Opcional:** `valgrind`, para conferir vazamentos.
 - **Gráficos** (opcional, só para `scripts/graficos.py`): Python 3 com `matplotlib`.
+- **Desenhos** (opcional, só para renderizar os `.dot`): Graphviz.
 
 No Ubuntu/Debian (inclusive no WSL), tudo isso se instala com:
 
 ```bash
-sudo apt install build-essential curl valgrind python3-matplotlib
+sudo apt install build-essential curl valgrind python3-matplotlib graphviz
 ```
 
 ### Passo a passo
@@ -255,6 +272,7 @@ aparece como pulado e os demais rodam normalmente.
 | `--semente-rng` | Semente do sorteio das amostras. Padrão: `2026`, que gera os arquivos versionados |
 | `--execucao` | Número desta execução, gravado no log. A 1 é o aquecimento. Padrão: `1` |
 | `--log` | CSV onde cada execução de `--algo` acrescenta uma linha. Padrão: `results/log.csv` |
+| `--dot` | Grava o grafo em formato Graphviz, com o resultado de `--algo` destacado (veja [Visualização](#visualização)) |
 | `--help` | Mostra a ajuda |
 
 Toda opção aceita também a forma `--opcao=valor`.
@@ -345,6 +363,7 @@ Os resultados vão para a saída padrão. Erros e avisos vão para a saída de e
 | `--output` | `articulacao` | `vertice,impacto,pedacos`: as articulações, da de maior impacto para a de menor |
 | `<prefixo>_histograma.csv` | `separacao` com `--output <prefixo>` | `saltos,pares_rede,perfis_influenciador` |
 | `<prefixo>_perfis.csv` | `separacao` com `--output <prefixo>` | `perfil,alcancados,excentricidade,dist_media,dist_influenciador_mais_proximo,influenciadores_alcancados,dist_media_influenciadores` |
+| `--dot` | qualquer `--algo` (menos `separacao`), ou nenhum | grafo em formato Graphviz (`.dot`), com o resultado destacado |
 | `<pasta>/bfs_<semente>_n<N>.txt` | `--amostrar <pasta>` | edge list no formato de entrada, com cabeçalho de comentários |
 
 No log, o `timestamp` está em UTC (ISO 8601), e o `algoritmo` é o nome de `--algo`,

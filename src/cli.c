@@ -21,7 +21,7 @@ static const char *NOMES_ALGORITMO[] = {
 #define NUM_ALGORITMOS (sizeof NOMES_ALGORITMO / sizeof NOMES_ALGORITMO[0])
 
 typedef enum { OP_INPUT, OP_STRUCT, OP_ALGO, OP_SOURCE, OP_OUTPUT, OP_AMOSTRAR, OP_SEMENTE_RNG,
-               OP_EXECUCAO, OP_LOG } Opcao;
+               OP_EXECUCAO, OP_LOG, OP_DOT } Opcao;
 
 static const struct {
     const char *nome;
@@ -30,6 +30,7 @@ static const struct {
     {"input", OP_INPUT},   {"struct", OP_STRUCT},     {"algo", OP_ALGO},
     {"source", OP_SOURCE}, {"output", OP_OUTPUT},     {"amostrar", OP_AMOSTRAR},
     {"semente-rng", OP_SEMENTE_RNG}, {"execucao", OP_EXECUCAO}, {"log", OP_LOG},
+    {"dot", OP_DOT},
 };
 #define NUM_OPCOES (sizeof OPCOES / sizeof OPCOES[0])
 
@@ -68,6 +69,9 @@ static CliStatus aplicar(Opcoes *op, Opcao id, const char *valor, char *erro, si
         break;
     case OP_LOG:
         op->log = valor;
+        break;
+    case OP_DOT:
+        op->dot = valor;
         break;
     case OP_STRUCT:
         if (strcmp(valor, "lista") == 0)
@@ -147,6 +151,8 @@ CliStatus cli_ler(int argc, char **argv, Opcoes *op, char *erro, size_t tam_erro
         return falhar(erro, tam_erro, "falta o arquivo de entrada: --input <arquivo>");
     if (op->pasta_amostras && op->algoritmo != ALGO_NENHUM)
         return falhar(erro, tam_erro, "--amostrar não pode ser usado junto com --algo");
+    if (op->pasta_amostras && op->dot)
+        return falhar(erro, tam_erro, "--dot não pode ser usado junto com --amostrar");
     return CLI_OK;
 }
 
@@ -170,6 +176,8 @@ void cli_uso(FILE *f, const char *programa)
             "                         aquecimento do protocolo (padrão: 1)\n"
             "  --log <arquivo>        CSV onde cada execução de --algo acrescenta uma linha\n"
             "                         com tempo e memória (padrão: %s)\n"
+            "  --dot <arquivo>        grava o grafo em formato Graphviz, com o resultado de\n"
+            "                         --algo destacado (legível só em grafos pequenos)\n"
             "  --help                 mostra esta ajuda\n"
             "\n"
             "Toda opção aceita também a forma --opcao=valor.\n"
