@@ -1,5 +1,10 @@
 # Análise de Topologia e Conectividade na Disseminação de Informações em Redes Sociais
 
+**João Pedro Gonçalves Campos Silvas, João Otavio Troiano Segoria, Gabriel Castagnaro Macêdo, Marcos Vinícius de Almeida Mendes**
+
+Curso de Ciência da Computação – Instituto de Educação Superior de Brasília (IESB)
+Brasília – DF – Brasil
+
 ## Resumo
 Este artigo apresenta o desenvolvimento e a análise estrutural de uma aplicação baseada na Teoria dos Grafos para investigar o fluxo de informações na rede social Twitter. Utilizando uma abordagem puramente topológica na Fase I, o sistema modela usuários como vértices e relações de seguimento como arestas direcionadas. O software foi construído nativamente em linguagem C com foco em eficiência de baixo nível e alternância dinâmica de representações em tempo de execução. Testes preliminares validaram o uso de algoritmos estruturais e buscas iterativas para mapear fenômenos de mundo pequeno, ciclos de retroalimentação e vulnerabilidades de fragmentação na malha social.
 
@@ -17,6 +22,20 @@ A arquitetura adota um design polimórfico baseado em uma tabela de operações 
 
 Para blindar o sistema contra falhas de estouro de pilha de execução (*Stack Overflow*) ao processar bases com milhares de vértices, os algoritmos estruturais — como a Busca em Profundidade (DFS) e a identificação de componentes conexos — foram implementados utilizando pilhas explícitas alocadas dinamicamente na memória (*heap*). A instrumentação temporal foi construída com a chamada de sistema `clock_gettime(CLOCK_MONOTONIC)`, garantindo precisão em milissegundos nas medições do protocolo experimental.
 
+Todas as execuções do protocolo experimental foram feitas em uma única máquina, descrita na Tabela 1, em uma mesma sessão e sem outros programas pesados abertos.
+
+**Tabela 1.** Especificação da máquina de testes.
+
+| Item | Especificação |
+|---|---|
+| Processador | Intel Core i7-8550U (8ª geração) @ 1.80GHz |
+| Núcleos / threads | 4 núcleos, 8 threads |
+| Memória RAM | 16 GB DDR4 2400 MT/s |
+| Sistema operacional | Bluefin (Fedora Atômico), kernel 6.16.8-200.fc42.x86_64 — compilação via toolbox Ubuntu 24.04.4 LTS |
+| Compilador | GCC 13.3.0 (Ubuntu 13.3.0-6ubuntu2~24.04.1) |
+| Opções de compilação | `-std=c11 -O2 -Wall -Wextra -pedantic -Werror -D_POSIX_C_SOURCE=200809L` |
+| Data da coleta | 01/10/2026 |
+
 ## 3. Resultados
 
 Os seis algoritmos da Fase I foram executados sobre as 12 amostras (N = 100, 250, 500 e 1.000 vértices, três sementes por tamanho) e sobre o grafo completo do ego-Twitter (|V| = 81.306, |E| = 1.768.135), nas duas representações. Cada configuração rodou 11 vezes seguidas, e a primeira execução, de aquecimento, foi descartada. As 2.090 execuções estão em `results/log.csv`, as médias e desvios padrão em `results/resumo.csv` e a máquina usada em `results/maquina.txt` (Intel Core i7-8550U, 15 GB de RAM, GCC 13.3 com `-O2`). Nenhuma configuração falhou (`results/inviaveis.csv` está vazio): a matriz coube na memória mesmo no grafo completo, o que só foi possível por ela ser uma matriz de bits.
@@ -25,9 +44,9 @@ Os seis algoritmos da Fase I foram executados sobre as 12 amostras (N = 100, 250
 
 A Figura 1 (`results/figs/tempo.png`) mostra o tempo de cada algoritmo em função de |V| + |E|, em escala log-log, contra a reta de referência O(V + E). Com lista de adjacência, todos os algoritmos acompanham a reta, do menor grafo (≈ 1.200 elementos) ao maior (≈ 1,8 milhão): a BFS leva 0,10 ms em N = 1.000 e 11,6 ms no grafo completo, e a articulação, a mais cara, 47,3 ms.
 
-Com a matriz, a curva se afasta da reta à medida que o grafo cresce. Percorrer os vizinhos de um vértice na matriz exige examinar a linha inteira, e a implementação pula palavras de 64 bits vazias; o custo total passa a ser O(V²/64 + E). Nas amostras, o termo V²/64 (no máximo 15.625 palavras, em N = 1.000) é da mesma ordem que |E|, e a matriz fica 1,4 a 1,9 vez mais lenta que a lista. No grafo completo, V²/64 chega a 103 milhões de palavras, contra 1,77 milhão de arestas, e domina o custo. A Tabela 1 resume a diferença.
+Com a matriz, a curva se afasta da reta à medida que o grafo cresce. Percorrer os vizinhos de um vértice na matriz exige examinar a linha inteira, e a implementação pula palavras de 64 bits vazias; o custo total passa a ser O(V²/64 + E). Nas amostras, o termo V²/64 (no máximo 15.625 palavras, em N = 1.000) é da mesma ordem que |E|, e a matriz fica 1,4 a 1,9 vez mais lenta que a lista. No grafo completo, V²/64 chega a 103 milhões de palavras, contra 1,77 milhão de arestas, e domina o custo. A Tabela 2 resume a diferença.
 
-**Tabela 1.** Tempo médio no grafo completo (ms).
+**Tabela 2.** Tempo médio no grafo completo (ms).
 
 | Algoritmo | Lista | Matriz | Matriz / Lista |
 |---|---|---|---|
