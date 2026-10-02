@@ -200,6 +200,8 @@ aparece como pulado e os demais rodam normalmente.
 | `--output` | Arquivo de saída dos resultados |
 | `--amostrar` | Pasta onde gravar as amostras: 3 sementes sorteadas × N = 100, 250, 500 e 1.000 |
 | `--semente-rng` | Semente do sorteio das amostras. Padrão: `2026`, que gera os arquivos versionados |
+| `--execucao` | Número desta execução, gravado no log. A 1 é o aquecimento. Padrão: `1` |
+| `--log` | CSV onde cada execução de `--algo` acrescenta uma linha. Padrão: `results/log.csv` |
 | `--help` | Mostra a ajuda |
 
 Toda opção aceita também a forma `--opcao=valor`.
@@ -233,12 +235,21 @@ O BFS percorre a visão direcionada, no sentido das arestas. Hoje estão ligados
 `separacao` e `componentes`; para os demais algoritmos de `--algo`, o programa aceita o
 nome e responde que ele ainda não foi implementado.
 
-Cada execução de `componentes` acrescenta uma linha por tipo de componente a
-`results/log.csv` (RF03), com timestamp, dataset, N, M, estrutura, algoritmo, tempo em
-ms, memória em KB e número da repetição. O tempo é só o do algoritmo, sem a montagem do
-grafo; a memória é o pico do memtrack da montagem do grafo até o fim do algoritmo, então
-inclui a estrutura, que é o que diferencia lista de matriz. `bfs` e `separacao` ainda
-não gravam no log.
+Toda execução de `--algo` acrescenta uma linha a `results/log.csv` (RF03), ou ao
+arquivo de `--log` — `componentes` grava uma por tipo de componente —, com as colunas
+`timestamp, dataset, N, M, estrutura, algoritmo, tempo_ms, memoria_kb, execucao_num`.
+O tempo é só o do algoritmo, sem a montagem do grafo; a memória é o pico do memtrack da
+montagem do grafo até o fim do algoritmo, então inclui a estrutura, que é o que
+diferencia lista de matriz. Como cada execução é um processo separado, o número da
+execução vem de `--execucao`:
+
+```bash
+# 11 execuções da mesma configuração; a 1ª é o aquecimento, descartado na análise
+for e in $(seq 1 11); do
+    ./bin/grafos --input data/samples/bfs_307642294_n1000.txt --algo bfs \
+                 --source 307642294 --struct lista --execucao $e
+done
+```
 
 ## Formato de entrada
 
