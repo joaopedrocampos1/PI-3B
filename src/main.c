@@ -107,6 +107,34 @@ static int gerar_amostras(const EdgeList *el, const Opcoes *op)
     return codigo;
 }
 
+/*
+ * Medição de cada execução de --algo (#25, RF03), como fixado no protocolo da
+ * Metodologia do artigo (#26):
+ *   tempo_ms    só o algoritmo, sem a leitura e a montagem do grafo;
+ *   memoria_kb  pico do memtrack da montagem do grafo até o fim do algoritmo,
+ *               descontado o que já existia antes (o grafo entra na conta,
+ *               porque é o que diferencia lista de matriz).
+ * Quem executa chama mt_reset_peak() e guarda mt_current_bytes() antes de
+ * graph_build, e lê mt_peak_bytes() assim que o algoritmo termina.
+ * Cada execução acrescenta uma linha a op->log; devolve 0 se não conseguiu.
+ */
+static int registrar(const Opcoes *op, const Graph *g, const char *algoritmo, double tempo_ms,
+                     size_t pico_bytes, size_t base_bytes)
+{
+    double memoria_kb = (double)(pico_bytes - base_bytes) / 1024.0;
+    printf("  tempo: %.3f ms | memória: %.1f KB (execução %u)\n", tempo_ms, memoria_kb,
+           op->execucao);
+
+    LogRegistro r = {op->entrada, graph_num_vertices(g), graph_num_edges(g),
+                     graph_rep_name(graph_rep(g)), algoritmo, tempo_ms, memoria_kb,
+                     op->execucao};
+    if (log_registrar(op->log, &r) != LOG_OK) {
+        fprintf(stderr, "erro: não foi possível gravar em '%s' (a pasta existe?)\n", op->log);
+        return 0;
+    }
+    return 1;
+}
+
 /* Quantos vértices estão a cada distância da origem. `hist` tem dist_max + 1
  * posições. */
 static void histograma(const BfsResultado *r, size_t *hist)
@@ -131,6 +159,8 @@ static int executar_bfs(const EdgeList *el, const Opcoes *op)
     IdMap ids;
     idmap_iniciar(&ids);
     Graph *g;
+    mt_reset_peak();
+    size_t base = mt_current_bytes();
     if (graph_build(el, &ids, rep, GRAPH_DIRECTED, &g) != GRAPH_OK) {
         fprintf(stderr, "erro: memória insuficiente para montar o grafo como %s\n",
                 graph_rep_name(rep));
@@ -146,7 +176,17 @@ static int executar_bfs(const EdgeList *el, const Opcoes *op)
         fprintf(stderr, "erro: o vértice %llu não existe no grafo\n", op->origem);
         goto fim;
     }
-    if (bfs_executar(g, origem, &r) != BFS_OK) {
+    Timer *cron = timer_criar();
+    if (!cron) {
+        fprintf(stderr, "erro: memória insuficiente para o cronômetro\n");
+        goto fim;
+    }
+    timer_iniciar(cron);
+    BfsStatus bs = bfs_executar(g, origem, &r);
+    double ms = timer_parar_ms(cron);
+    size_t pico = mt_peak_bytes();
+    timer_destruir(cron);
+    if (bs != BFS_OK) {
         fprintf(stderr, "erro: memória insuficiente para o BFS\n");
         goto fim;
     }
@@ -167,7 +207,7 @@ static int executar_bfs(const EdgeList *el, const Opcoes *op)
     for (size_t d = 1; d <= r.dist_max; d++)
         printf("  %zu salto(s): %zu vértices\n", d, hist[d]);
 
-    codigo = 0;
+    codigo = registrar(op, g, "bfs", ms, pico, base) ? 0 : 1;
     if (op->saida) {
         FILE *f = fopen(op->saida, "w");
         if (!f) {
@@ -239,6 +279,8 @@ static int executar_separacao(const EdgeList *el, const Opcoes *op)
     IdMap ids;
     idmap_iniciar(&ids);
     Graph *g;
+    mt_reset_peak();
+    size_t base = mt_current_bytes();
     if (graph_build(el, &ids, rep, GRAPH_DIRECTED, &g) != GRAPH_OK) {
         fprintf(stderr, "erro: memória insuficiente para montar o grafo como %s\n",
                 graph_rep_name(rep));
@@ -246,9 +288,21 @@ static int executar_separacao(const EdgeList *el, const Opcoes *op)
         return 1;
     }
 
+    Timer *cron = timer_criar();
+    if (!cron) {
+        fprintf(stderr, "erro: memória insuficiente para o cronômetro\n");
+        graph_destroy(g);
+        idmap_liberar(&ids);
+        return 1;
+    }
+    /* o cálculo exato, feito à parte nas amostras pequenas, fica fora da medição */
     SeparacaoResultado r;
+    timer_iniciar(cron);
     SeparacaoStatus st = separacao_analisar(g, SEPARACAO_FRACAO_PADRAO, SEPARACAO_PERFIS_PADRAO,
                                             op->semente_rng, &r);
+    double ms = timer_parar_ms(cron);
+    size_t pico = mt_peak_bytes();
+    timer_destruir(cron);
     if (st != SEPARACAO_OK) {
         fprintf(stderr, "erro: %s\n", st == SEPARACAO_ERRO_MEMORIA
                                           ? "memória insuficiente para a análise"
@@ -288,6 +342,8 @@ static int executar_separacao(const EdgeList *el, const Opcoes *op)
     }
     if (op->saida && !gravar_separacao(op->saida, &r, &ids))
         codigo = 1;
+    if (!registrar(op, g, "separacao", ms, pico, base))
+        codigo = 1;
 
     separacao_liberar(&r);
     graph_destroy(g);
@@ -297,13 +353,7 @@ static int executar_separacao(const EdgeList *el, const Opcoes *op)
 
 /* --algo componentes (#18): fortemente conexos (visão direcionada), que
  * respondem quem alcança quem, e fracamente conexos (visão simetrizada), que
- * respondem se a rede é uma peça só.
- *
- * Cada um vira uma linha em results/log.csv (RF03):
- *   tempo_ms    só o algoritmo, sem a montagem do grafo;
- *   memoria_kb  pico do memtrack da montagem do grafo até o fim do algoritmo,
- *               descontado o que já existia antes (o grafo entra na conta,
- *               porque é o que diferencia lista de matriz).
+ * respondem se a rede é uma peça só. Cada um vira uma linha no log.
  * Devolve o código de saída do programa. */
 static int executar_componentes(const EdgeList *el, const Opcoes *op)
 {
@@ -356,7 +406,7 @@ static int executar_componentes(const EdgeList *el, const Opcoes *op)
             ms = timer_parar_ms(cron);
             timer_destruir(cron);
         }
-        double kb = (double)(mt_peak_bytes() - base) / 1024.0;
+        size_t pico = mt_peak_bytes();
 
         ComponentesFaixa *faixas = NULL;
         size_t k = 0;
@@ -381,20 +431,14 @@ static int executar_componentes(const EdgeList *el, const Opcoes *op)
         for (size_t i = 0; i < k && i < 6; i++)
             printf("%s %zu (x%zu)", i ? "," : "", faixas[i].tamanho, faixas[i].quantidade);
         printf("%s\n", k > 6 ? ", ..." : "");
-        printf("  tempo: %.3f ms | memória: %.1f KB\n", ms, kb);
 
         if (csv)
             for (size_t i = 0; i < k; i++)
                 fprintf(csv, "%s,%zu,%zu\n", t == 0 ? "fortes" : "fracos", faixas[i].tamanho,
                         faixas[i].quantidade);
 
-        LogRegistro reg = {op->entrada, n, graph_num_edges(g), graph_rep_name(rep),
-                           TIPOS[t].algoritmo, ms, kb, 1};
-        if (log_registrar(LOG_CAMINHO_PADRAO, &reg) != LOG_OK) {
-            fprintf(stderr, "aviso: não foi possível gravar em %s (a pasta existe?)\n",
-                    LOG_CAMINHO_PADRAO);
-            codigo = 2;
-        }
+        if (!registrar(op, g, TIPOS[t].algoritmo, ms, pico, base))
+            codigo = 1;
 
         mt_free(faixas);
         componentes_liberar(&r);
