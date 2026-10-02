@@ -1,0 +1,30 @@
+graph G {
+  label="Pontes e vértices de articulação em vermelho";
+  labelloc=t;
+  node [shape=circle, fontsize=9, fontname="Helvetica", color="#52514e"];
+  edge [color="#8a8984", arrowsize=0.6];
+  "0";
+  "1";
+  "2" [penwidth=3, color="#e34948"];
+  "3" [penwidth=3, color="#e34948"];
+  "4";
+  "5" [penwidth=3, color="#e34948"];
+  "6" [penwidth=3, color="#e34948"];
+  "7" [penwidth=3, color="#e34948"];
+  "8";
+  "9";
+  "10" [penwidth=3, color="#e34948"];
+  "11";
+  "0" -- "1";
+  "0" -- "2";
+  "1" -- "2";
+  "2" -- "3" [color="#e34948", penwidth=2.5];
+  "3" -- "4";
+  "3" -- "5";
+  "4" -- "5";
+  "5" -- "6" [color="#e34948", penwidth=2.5];
+  "6" -- "7" [color="#e34948", penwidth=2.5];
+  "7" -- "8" [color="#e34948", penwidth=2.5];
+  "9" -- "10" [color="#e34948", penwidth=2.5];
+  "10" -- "11" [color="#e34948", penwidth=2.5];
+}

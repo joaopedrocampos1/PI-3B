@@ -1,0 +1,30 @@
+digraph G {
+  label="Ciclos: o ciclo de exemplo em vermelho";
+  labelloc=t;
+  node [shape=circle, fontsize=9, fontname="Helvetica", color="#52514e"];
+  edge [color="#8a8984", arrowsize=0.6];
+  "0" [penwidth=3, color="#e34948"];
+  "1" [penwidth=3, color="#e34948"];
+  "2" [penwidth=3, color="#e34948"];
+  "3";
+  "4";
+  "5";
+  "6";
+  "7";
+  "8";
+  "9";
+  "10";
+  "11";
+  "0" -> "1" [color="#e34948", penwidth=2.5];
+  "1" -> "2" [color="#e34948", penwidth=2.5];
+  "2" -> "0" [color="#e34948", penwidth=2.5];
+  "2" -> "3";
+  "3" -> "4";
+  "4" -> "5";
+  "5" -> "3";
+  "5" -> "6";
+  "6" -> "7";
+  "7" -> "8";
+  "9" -> "10";
+  "10" -> "11";
+}

@@ -1,0 +1,16 @@
+graph G {
+  label="Pontes e vértices de articulação em vermelho";
+  labelloc=t;
+  node [shape=circle, fontsize=9, fontname="Helvetica", color="#52514e"];
+  edge [color="#8a8984", arrowsize=0.6];
+  "0";
+  "1";
+  "2";
+  "3" [penwidth=3, color="#e34948"];
+  "4";
+  "0" -- "1";
+  "0" -- "3";
+  "1" -- "2";
+  "2" -- "3";
+  "3" -- "4" [color="#e34948", penwidth=2.5];
+}

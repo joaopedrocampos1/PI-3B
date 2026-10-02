@@ -1,0 +1,30 @@
+graph G {
+  label="Bipartição: não bipartido; ciclo ímpar em vermelho";
+  labelloc=t;
+  node [shape=circle, fontsize=9, fontname="Helvetica", color="#52514e"];
+  edge [color="#8a8984", arrowsize=0.6];
+  "0" [style=filled, fillcolor="#2a78d6", penwidth=3, color="#e34948"];
+  "1" [style=filled, fillcolor="#eb6834", penwidth=3, color="#e34948"];
+  "2" [style=filled, fillcolor="#eb6834", penwidth=3, color="#e34948"];
+  "3" [style=filled, fillcolor="#2a78d6"];
+  "4" [style=filled, fillcolor="#eb6834"];
+  "5" [style=filled, fillcolor="#eb6834"];
+  "6" [style=filled, fillcolor="#2a78d6"];
+  "7" [style=filled, fillcolor="#eb6834"];
+  "8" [style=filled, fillcolor="#2a78d6"];
+  "9" [style=filled, fillcolor="#2a78d6"];
+  "10" [style=filled, fillcolor="#eb6834"];
+  "11" [style=filled, fillcolor="#2a78d6"];
+  "0" -- "1" [color="#e34948", penwidth=2.5];
+  "0" -- "2" [color="#e34948", penwidth=2.5];
+  "1" -- "2" [color="#e34948", penwidth=2.5];
+  "2" -- "3";
+  "3" -- "4";
+  "3" -- "5";
+  "4" -- "5";
+  "5" -- "6";
+  "6" -- "7";
+  "7" -- "8";
+  "9" -- "10";
+  "10" -- "11";
+}

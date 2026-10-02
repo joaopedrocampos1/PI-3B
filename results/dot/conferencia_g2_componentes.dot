@@ -1,0 +1,16 @@
+digraph G {
+  label="Componentes fortemente conexos: os 7 maiores em cores, os demais em cinza";
+  labelloc=t;
+  node [shape=circle, fontsize=9, fontname="Helvetica", color="#52514e"];
+  edge [color="#8a8984", arrowsize=0.6];
+  "0" [style=filled, fillcolor="#2a78d6"];
+  "1" [style=filled, fillcolor="#2a78d6"];
+  "2" [style=filled, fillcolor="#2a78d6"];
+  "3" [style=filled, fillcolor="#2a78d6"];
+  "4";
+  "0" -> "1";
+  "1" -> "2";
+  "2" -> "3";
+  "3" -> "0";
+  "3" -> "4";
+}
