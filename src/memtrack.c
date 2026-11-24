@@ -2,7 +2,17 @@
 
 #include <stdint.h>
 #include <stdlib.h>
+
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <psapi.h>
+#ifdef _MSC_VER
+#pragma comment(lib, "psapi.lib")   /* GetProcessMemoryInfo, em SDKs antigos */
+#endif
+#else
 #include <sys/resource.h>
+#endif
 
 /*
  * Cada bloco leva um cabeçalho escondido com o tamanho pedido, para que
@@ -77,10 +87,22 @@ size_t mt_current_bytes(void) { return atual; }
 size_t mt_peak_bytes(void)    { return pico; }
 void   mt_reset_peak(void)    { pico = atual; }
 
+/* Pico de memória residente do processo, em KB, segundo o sistema. */
 long mt_peak_rss_kb(void)
 {
+#ifdef _WIN32
+    PROCESS_MEMORY_COUNTERS uso;
+    if (!GetProcessMemoryInfo(GetCurrentProcess(), &uso, sizeof uso))
+        return -1;
+    return (long)(uso.PeakWorkingSetSize / 1024);
+#else
     struct rusage uso;
     if (getrusage(RUSAGE_SELF, &uso) != 0)
         return -1;
-    return uso.ru_maxrss;     /* no Linux, já vem em KB */
+#ifdef __APPLE__
+    return (long)(uso.ru_maxrss / 1024);   /* no macOS, vem em bytes */
+#else
+    return uso.ru_maxrss;                  /* no Linux, já vem em KB */
+#endif
+#endif
 }
