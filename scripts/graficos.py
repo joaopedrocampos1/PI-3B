@@ -192,7 +192,7 @@ def figura_memoria(resumo):
 
 def main():
     if not os.path.exists(LOG):
-        sys.exit(f"erro: {LOG} não existe; rode antes scripts/bateria.sh")
+        sys.exit(f"erro: {LOG} não existe; rode antes scripts/bateria.py")
     os.makedirs(FIGS, exist_ok=True)
     resumo = resumir(ler_medicoes(LOG))
     if not resumo:
