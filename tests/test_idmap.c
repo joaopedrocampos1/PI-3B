@@ -6,7 +6,7 @@
  *   ./bin/test_idmap
  *
  * O teste com o dataset real exige data/raw/twitter_combined.txt
- * (scripts/baixar_dataset.sh); sem o arquivo, ele é pulado.
+ * (scripts/baixar_dataset.py); sem o arquivo, ele é pulado.
  */
 #include "edgelist.h"
 #include "memtrack.h"
@@ -120,7 +120,7 @@ static void dataset_twitter_completo(void)
 {
     EdgeList el;
     if (edgelist_ler(DATASET, &el) != EDGELIST_OK) {
-        printf("  (pulado: %s ausente; rode scripts/baixar_dataset.sh)\n", DATASET);
+        printf("  (pulado: %s ausente; rode scripts/baixar_dataset.py)\n", DATASET);
         return;
     }
 
