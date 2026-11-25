@@ -57,6 +57,12 @@ dkms.conf
 # Binário compilado
 bin/
 
+# Saídas do uso normal do programa (#60), fora do git: o log padrão de --algo e
+# a pasta dos exemplos do README. A bateria grava results/log.csv com --log.
+results/execucoes.csv
+results/exemplos/*
+!results/exemplos/.gitkeep
+
 # Dataset bruto: grande demais para o git, obtido com scripts/baixar_dataset.sh
 data/raw/*
 !data/raw/.gitkeep

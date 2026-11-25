@@ -18,7 +18,9 @@
  *   como manda o CSV, então caminhos de dataset quaisquer não quebram colunas.
  */
 
-#define LOG_CAMINHO_PADRAO "results/log.csv"
+/* Fora do controle de versão (#60): o uso normal do programa não pode alterar
+ * o log versionado da bateria, que passa --log results/log.csv explicitamente. */
+#define LOG_CAMINHO_PADRAO "results/execucoes.csv"
 
 typedef struct {
     const char *dataset;     /* caminho do arquivo de entrada */
