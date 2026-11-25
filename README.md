@@ -488,16 +488,17 @@ python3 scripts/graficos.py     # results/figs/*.png e results/resumo.csv
 A bateria se recusa a rodar se `results/log.csv` já existir, para não misturar
 execuções; mova ou apague o log antes de refazê-la.
 
-O que a bateria versionada mostra (ela ainda é a do grafo completo; será refeita com o
-recorte na #62):
+O que a bateria versionada mostra (refeita com o recorte na #62; a bateria inteira leva
+menos de um minuto):
 
 - Com lista, todos os algoritmos acompanham a reta O(V + E) do menor ao maior grafo.
 - Com a matriz de bits, o custo é V²/64 + E: nas amostras, o termo V²/64 é desprezível
-  e a matriz fica perto da lista; no grafo completo ele domina, e a matriz fica de 3,6
-  (articulação) a 9,3 (BFS) vezes mais lenta.
+  e a matriz fica perto da lista; no recorte ele passa a pesar, e a matriz fica de 2,2
+  (bipartição) a 3,4 (BFS) vezes mais lenta.
 - Na memória há um ponto de virada. As amostras, densas, cabem numa matriz de bits
-  menor que a lista (0,3 a 0,5 vez); no grafo completo, esparso, a matriz ocupa cerca
-  de 800 MB, 24 vezes a lista.
+  menor que a lista (0,3 a 0,5 vez); no recorte, com densidade de 0,38%, a matriz ocupa
+  cerca de 13 MB, de 1,7 a 2,6 vezes a lista. No grafo completo, fora do protocolo
+  desde a #59, ela passava de 800 MB.
 
 ## Fase II
 

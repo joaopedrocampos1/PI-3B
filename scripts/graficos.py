@@ -130,7 +130,7 @@ def figura_tempo(resumo):
                         label=est, zorder=3)
             # Só a referência O(V+E), ancorada no menor ponto da lista. A matriz de
             # bits custa V²/64 + E: nas amostras o termo V²/64 é desprezível, e só no
-            # grafo completo ele domina. Uma reta V² ancorada no menor ponto
+            # recorte ele passa a pesar. Uma reta V² ancorada no menor ponto
             # exageraria essa diferença; o desvio da matriz acima de O(V+E) já a mostra.
             if est == "lista":
                 referencia(ax, xs, xs[0], ys[0], 1, "O(V+E)")
