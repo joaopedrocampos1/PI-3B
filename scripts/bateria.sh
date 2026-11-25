@@ -8,8 +8,9 @@
 #   x 6 algoritmos (bfs, dfs, componentes, ciclos, bipartido, articulacao),
 #   cada configuração executada 11 vezes seguidas; a 1ª é o aquecimento.
 #
-# BFS e DFS partem da semente da própria instância, lida do cabeçalho do
-# arquivo ("# semente: ..."); o recorte é tratado como as amostras. Cada execução acrescenta uma linha a results/log.csv
+# BFS e DFS partem da semente da própria amostra, lida do cabeçalho do arquivo
+# ("# semente: ..."). No recorte, como no grafo completo, partem de três
+# origens (veja ORIGENS_RECORTE). Cada execução acrescenta uma linha a results/log.csv
 # (componentes acrescenta duas: fortes e fracos). Uma configuração que falha,
 # como a matriz sem memória, é registrada em results/inviaveis.csv e a bateria
 # segue: o protocolo trata esse limite como resultado.
@@ -25,6 +26,10 @@ set -u
 cd "$(dirname "$0")/.." || exit 1
 
 RECORTE=data/recorte_n10000.txt
+# Três origens no recorte, como no grafo completo: a semente dele (307642294) e
+# as duas primeiras sorteadas dentro dele com --semente-rng 2026, no lugar de
+# 144319796 e 9487272, que ficaram fora do recorte.
+ORIGENS_RECORTE="307642294 15606470 46322647"
 ALGORITMOS="bfs dfs componentes ciclos bipartido articulacao"
 ESTRUTURAS="lista matriz"
 
@@ -63,7 +68,11 @@ make -s bin/grafos || exit 1
 # A semente de cada instância está no cabeçalho gravado por --amostrar e
 # --recorte: "# semente: <id>"
 origens_de() {
-    sed -n 's/^# semente: *\([0-9]*\).*/\1/p' "$1"
+    if [ "$1" = "$RECORTE" ]; then
+        echo "$ORIGENS_RECORTE"
+    else
+        sed -n 's/^# semente: *\([0-9]*\).*/\1/p' "$1"
+    fi
 }
 
 # Lista as configurações, uma por linha: instância estrutura algoritmo origem

@@ -467,8 +467,11 @@ Circles in Ego Networks*. NIPS, 2012.
 O protocolo completo está na Metodologia do artigo. Em resumo: os seis algoritmos
 rodam sobre as 12 amostras (N = 100, 250, 500 e 1.000) e o recorte de 10 mil vértices,
 nas duas representações, cada configuração 11 vezes seguidas; a primeira é o aquecimento
-e é descartada. BFS e DFS partem da semente da própria instância (gravada no cabeçalho
-do arquivo), o que dá 156 configurações. Nada precisa ser baixado.
+e é descartada. BFS e DFS partem da semente da própria amostra e, no recorte, de três
+origens, como no grafo completo: a semente dele (307642294) e as duas primeiras
+sorteadas dentro dele com `--semente-rng 2026` (15606470 e 46322647), no lugar de
+144319796 e 9487272, que ficaram fora do recorte. Isso dá 164 configurações, o mesmo
+número da bateria com o grafo completo. Nada precisa ser baixado.
 
 ```bash
 ./scripts/bateria.sh            # grava results/log.csv do zero
