@@ -2,13 +2,15 @@
 """Bateria de testes de estresse (#27), seguindo o protocolo da Metodologia do
 artigo (#26):
 
-  13 instâncias (as 12 amostras de data/samples e o grafo completo)
+  13 instâncias (as 12 amostras de data/samples e o recorte de 10 mil
+  vértices, data/recorte_n10000.txt, que substitui o grafo completo: #59)
   x 2 representações (lista e matriz)
   x 6 algoritmos (bfs, dfs, componentes, ciclos, bipartido, articulacao),
   cada configuração executada 11 vezes seguidas; a 1ª é o aquecimento.
 
-BFS e DFS partem da semente da própria amostra; no grafo completo, de cada
-uma das três sementes. Cada execução acrescenta uma linha a results/log.csv
+BFS e DFS partem da semente da própria instância, lida do cabeçalho do
+arquivo ("# semente: ..."); o recorte é tratado como as amostras, o que dá
+156 configurações. Cada execução acrescenta uma linha a results/log.csv
 (componentes acrescenta duas: fortes e fracos). Uma configuração que falha,
 como a matriz sem memória, é registrada em results/inviaveis.csv e a bateria
 segue: o protocolo trata esse limite como resultado.
@@ -33,8 +35,7 @@ import time
 from comum import GRAFOS, compilar, ir_para_raiz
 from maquina import descrever_maquina
 
-COMPLETO = "data/raw/twitter_combined.txt"
-SEMENTES = ["307642294", "144319796", "9487272"]   # sorteadas com --semente-rng 2026
+RECORTE = "data/recorte_n10000.txt"
 ALGORITMOS = ["bfs", "dfs", "componentes", "ciclos", "bipartido", "articulacao"]
 ESTRUTURAS = ["lista", "matriz"]
 
@@ -48,13 +49,14 @@ ERROS = os.path.join("bin", "bateria_erros.txt")
 def instancias():
     if os.environ.get("INSTANCIAS"):
         return os.environ["INSTANCIAS"].split()
-    return sorted(glob.glob("data/samples/bfs_*.txt")) + [COMPLETO]
+    return sorted(glob.glob("data/samples/bfs_*.txt")) + [RECORTE]
 
 
 def origens_de(instancia):
-    """A semente de uma amostra está no cabeçalho gravado por --amostrar
-    ("# semente: <id>") e também no nome, bfs_<semente>_n<N>.txt. Sem
-    nenhum dos dois, como no grafo completo, valem as três sementes."""
+    """A semente de uma instância está no cabeçalho gravado por --amostrar
+    e --recorte ("# semente: <id>"); nas amostras, também no nome,
+    bfs_<semente>_n<N>.txt. Sem nenhum dos dois, a bateria para: BFS e DFS
+    não teriam de onde partir."""
     with open(instancia, encoding="utf-8", errors="replace") as f:
         for linha in f:
             if not linha.startswith("#"):
@@ -63,7 +65,9 @@ def origens_de(instancia):
             if m:
                 return [m.group(1)]
     m = re.match(r"bfs_(\d+)_n", os.path.basename(instancia))
-    return [m.group(1)] if m else SEMENTES
+    if not m:
+        sys.exit(f"erro: {instancia} não informa a semente (cabeçalho \"# semente: <id>\")")
+    return [m.group(1)]
 
 
 def configuracoes(lista):
@@ -86,7 +90,7 @@ def main():
         sys.exit(f"erro: {LOG} já existe. A bateria grava um log limpo; mova ou apague o atual antes.")
     for f in lista:
         if not os.path.isfile(f):
-            sys.exit(f"erro: {f} não existe (o grafo completo vem de scripts/baixar_dataset.py)")
+            sys.exit(f"erro: {f} não existe")
     compilar()
 
     # Especificação da máquina, exigida pelo protocolo.
