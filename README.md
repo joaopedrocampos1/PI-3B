@@ -110,9 +110,11 @@ derivados: podem ser apagados e regerados com `--amostrar`, que produz exatament
 mesmos arquivos. São versionados para que todos rodem os experimentos sobre as mesmas
 amostras.
 
-**`results/log.csv`** — uma linha por execução de algoritmo, com tempo em milissegundos
-e consumo de memória (RF03). É a matéria-prima dos gráficos e a evidência experimental
-do artigo, por isso é versionado.
+**`results/log.csv`** — uma linha por execução de algoritmo da bateria, com tempo em
+milissegundos e consumo de memória (RF03). É a matéria-prima dos gráficos e a evidência
+experimental do artigo, por isso é versionado. Só a bateria escreve nele: o uso normal
+do programa grava em `results/execucoes.csv`, e os exemplos deste README gravam em
+`results/exemplos/`, os dois fora do git.
 
 **`results/dot/`** — os grafos exportados em formato Graphviz, para visualização.
 
@@ -161,8 +163,8 @@ sobre os dois grafos da conferência manual e sobre uma amostra de 100 vértices
 `.dot` acompanhado do seu PNG.
 
 ```bash
-./bin/grafos --input tests/grafos/conferencia_g1.txt --algo articulacao --dot g1.dot
-dot -Tpng g1.dot -o g1.png        # requer o Graphviz
+./bin/grafos --input tests/grafos/conferencia_g1.txt --algo articulacao --dot results/exemplos/g1.dot
+dot -Tpng results/exemplos/g1.dot -o results/exemplos/g1.png    # requer o Graphviz
 
 ./scripts/gerar_desenhos.sh       # refaz todos os desenhos de results/dot/
 ./scripts/render_dot.sh           # só renderiza os .dot que já existem
@@ -233,7 +235,7 @@ Componentes fortemente conexos (lista, visão direcionada)
 ...
 ```
 
-e acrescenta duas linhas a `results/log.csv`.
+e acrescenta duas linhas a `results/execucoes.csv`, que fica fora do git.
 
 ## Compilação
 
@@ -271,7 +273,7 @@ aparece como pulado e os demais rodam normalmente.
 | `--amostrar` | Pasta onde gravar as amostras: 3 sementes sorteadas × N = 100, 250, 500 e 1.000 |
 | `--semente-rng` | Semente do sorteio das amostras. Padrão: `2026`, que gera os arquivos versionados |
 | `--execucao` | Número desta execução, gravado no log. A 1 é o aquecimento. Padrão: `1` |
-| `--log` | CSV onde cada execução de `--algo` acrescenta uma linha. Padrão: `results/log.csv` |
+| `--log` | CSV onde cada execução de `--algo` acrescenta uma linha. Padrão: `results/execucoes.csv`, fora do git; a bateria usa `--log results/log.csv` |
 | `--dot` | Grava o grafo em formato Graphviz, com o resultado de `--algo` destacado (veja [Visualização](#visualização)) |
 | `--help` | Mostra a ajuda |
 
@@ -285,20 +287,21 @@ por completo — uma amostra maior que o componente da semente.
 # BFS a partir do usuário 307642294: alcance, excentricidade, distância média e
 # histograma de distâncias (gravado em CSV com --output)
 ./bin/grafos --input data/samples/bfs_307642294_n1000.txt --algo bfs --source 307642294 \
-             --struct matriz --output results/bfs_hist.csv
+             --struct matriz --output results/exemplos/bfs_hist.csv
 ```
 
 ```bash
 # graus de separação entre perfis comuns e influenciadores (1% com mais seguidores),
-# a partir de 1.000 perfis sorteados; grava results/separacao_histograma.csv e
-# results/separacao_perfis.csv. Método e resultados em results/separacao.md
-./bin/grafos --input data/raw/twitter_combined.txt --algo separacao --output results/separacao
+# a partir de 1.000 perfis sorteados; grava results/exemplos/separacao_histograma.csv e
+# results/exemplos/separacao_perfis.csv. Método e resultados versionados em
+# results/separacao.md
+./bin/grafos --input data/raw/twitter_combined.txt --algo separacao --output results/exemplos/separacao
 ```
 
 ```bash
 # pontes e vértices de articulação, com o ranking por impacto de fragmentação: quantos
 # usuários perdem contato com o maior pedaço da rede sem cada articulação
-./bin/grafos --input data/raw/twitter_combined.txt --algo articulacao --output results/articulacao.csv
+./bin/grafos --input data/raw/twitter_combined.txt --algo articulacao --output results/exemplos/articulacao.csv
 ```
 
 Cada algoritmo roda sobre a visão do grafo definida para ele:
@@ -317,9 +320,9 @@ Os algoritmos estruturais (DFS, ciclos, bipartição e articulação) percorrem 
 inteiro, sem parar no primeiro resultado, para que o custo seja O(V + E) em qualquer
 instância, como o protocolo experimental mede.
 
-Toda execução de `--algo` acrescenta uma linha a `results/log.csv` (RF03), com as
-colunas `timestamp, dataset, N, M, estrutura, algoritmo, tempo_ms, memoria_kb,
-execucao_num`. Seguindo o protocolo do artigo, o tempo cobre só o algoritmo, e a
+Toda execução de `--algo` acrescenta uma linha ao log (RF03), com as colunas
+`timestamp, dataset, N, M, estrutura, algoritmo, tempo_ms, memoria_kb, execucao_num`.
+O log padrão é `results/execucoes.csv`, fora do git; `--log` escolhe outro arquivo. Seguindo o protocolo do artigo, o tempo cobre só o algoritmo, e a
 memória é o pico do memtrack entre o início da construção do grafo e o fim do
 algoritmo. Como cada execução é um processo separado, o número da execução vem de
 `--execucao`:
@@ -354,7 +357,7 @@ Os resultados vão para a saída padrão. Erros e avisos vão para a saída de e
 
 | Arquivo | Gerado por | Colunas |
 |---|---|---|
-| `results/log.csv` (ou `--log`) | toda execução de `--algo` | `timestamp,dataset,N,M,estrutura,algoritmo,tempo_ms,memoria_kb,execucao_num` |
+| `results/execucoes.csv` (ou `--log`) | toda execução de `--algo` | `timestamp,dataset,N,M,estrutura,algoritmo,tempo_ms,memoria_kb,execucao_num` |
 | `--output` | `bfs` | `distancia,vertices`: quantos vértices estão a cada distância da origem |
 | `--output` | `componentes` | `tipo,tamanho,componentes`: `tipo` é `fortes` ou `fracos` |
 | `--output` | `dfs` | `vertice,descoberta,finalizacao`: tempos de cada vértice, de 1 a 2V |
