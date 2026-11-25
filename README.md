@@ -126,8 +126,8 @@ do programa grava em `results/execucoes.csv`, e os exemplos deste README gravam 
 **`results/figs/`** — as imagens: os `.dot` renderizados e os gráficos de desempenho.
 É de onde as figuras saem para dentro do artigo.
 
-**`scripts/`** — Python/gnuplot para ler o `log.csv` e desenhar os gráficos, mais a
-renderização dos `.dot` em lote. Fica separado de propósito: o RNF01 proíbe biblioteca
+**`scripts/`** — Python para baixar o dataset, rodar a bateria, ler o `log.csv` e
+desenhar os gráficos, mais a renderização dos `.dot` em lote. Fica separado de propósito: o RNF01 proíbe biblioteca
 pronta de grafos nos algoritmos, mas não no ferramental de análise, e essa fronteira
 precisa ser visível.
 
@@ -171,8 +171,8 @@ sobre os dois grafos da conferência manual e sobre uma amostra de 100 vértices
 ./bin/grafos --input tests/grafos/conferencia_g1.txt --algo articulacao --dot results/exemplos/g1.dot
 dot -Tpng results/exemplos/g1.dot -o results/exemplos/g1.png    # requer o Graphviz
 
-./scripts/gerar_desenhos.sh       # refaz todos os desenhos de results/dot/
-./scripts/render_dot.sh           # só renderiza os .dot que já existem
+python3 scripts/gerar_desenhos.py   # refaz todos os desenhos de results/dot/
+python3 scripts/render_dot.py       # só renderiza os .dot que já existem
 ```
 
 | `--algo` | O que o desenho destaca |
@@ -202,9 +202,10 @@ ilegível e leva dezenas de segundos para sair.
   medição de tempo e memória tem uma versão POSIX e uma versão Windows
   (`src/timer.c`, `src/memtrack.c`); veja [No Windows](#no-windows-mingw-w64) abaixo.
 - **Compilação:** `gcc` com suporte a C11 e `make` (no Windows, `mingw32-make`).
-- **Dataset** (opcional, só para regerar o recorte e as amostras a partir do ego-Twitter
-  inteiro): `curl`, `sha256sum` e `gunzip`.
-  As 12 amostras do protocolo já vêm no repositório.
+- **Scripts** (`scripts/` e `tests/run_tests.py`): Python 3, só com a biblioteca
+  padrão. Rodam igual no Linux, no macOS e no Windows. As 12 amostras e o recorte do
+  protocolo já vêm no repositório; o ego-Twitter inteiro, opcional, só serve para
+  regerá-los e vem de `scripts/baixar_dataset.py`.
 - **Opcional:** `valgrind`, para conferir vazamentos.
 - **Gráficos** (opcional, só para `scripts/graficos.py`): Python 3 com `matplotlib`.
 - **Desenhos** (opcional, só para renderizar os `.dot`): Graphviz.
@@ -212,7 +213,7 @@ ilegível e leva dezenas de segundos para sair.
 No Ubuntu/Debian (inclusive no WSL), tudo isso se instala com:
 
 ```bash
-sudo apt install build-essential curl valgrind python3-matplotlib graphviz
+sudo apt install build-essential python3 valgrind python3-matplotlib graphviz
 ```
 
 ### No Windows (MinGW-w64)
@@ -228,8 +229,8 @@ mingw32-make test             # roda os testes; deve terminar com "0 falha(s)" e
 
 O Makefile percebe sozinho se está no cmd/PowerShell ou num shell POSIX e ajusta os
 comandos (`mkdir`, `del`/`rm`, `.exe`, `-lpsapi`). Testado com o gcc 16.1 (WinLibs, UCRT)
-no Windows 11. Os scripts de `scripts/*.sh` (baixar o dataset, gerar desenhos) são de
-shell POSIX: rode-os no Git Bash ou no WSL.
+no Windows 11. Os scripts de `scripts/` são em Python e rodam direto no PowerShell ou no
+cmd (`python scripts\bateria.py`, por exemplo); os desenhos precisam do Graphviz no PATH.
 
 ### Passo a passo
 
@@ -265,7 +266,7 @@ Requer `gcc` e `make`. Nenhuma dependência externa.
 
 ```bash
 make          # compila bin/grafos
-make test     # compila e roda os testes de tests/ (o mesmo que ./tests/run_tests.sh)
+make test     # compila e roda os testes de tests/ (ou: python3 tests/run_tests.py)
 make clean
 ```
 
@@ -430,7 +431,7 @@ Não é versionado (44 MB descompactado) e só é necessário para regerar o rec
 amostras. Para obtê-lo:
 
 ```bash
-./scripts/baixar_dataset.sh
+python3 scripts/baixar_dataset.py
 ```
 
 O script baixa o arquivo para `data/raw/`, confere o SHA-256 e descompacta.
@@ -471,7 +472,7 @@ e é descartada. BFS e DFS partem da semente da própria instância (gravada no 
 do arquivo), o que dá 156 configurações. Nada precisa ser baixado.
 
 ```bash
-./scripts/bateria.sh            # grava results/log.csv do zero
+python3 scripts/bateria.py      # grava results/log.csv do zero
 python3 scripts/graficos.py     # results/figs/*.png e results/resumo.csv
 ```
 
