@@ -78,7 +78,8 @@ milhares de vértices a versão recursiva estoura a pilha de chamadas.
 ├── src/
 ├── data/
 │   ├── raw/
-│   └── samples/
+│   ├── samples/
+│   └── recorte_n10000.txt
 ├── results/
 │   ├── log.csv
 │   ├── dot/
@@ -101,8 +102,12 @@ algoritmos enxergam.
 **`src/`** — todo o código C: parser, as duas representações, os seis algoritmos,
 instrumentação e o `main.c`.
 
-**`data/raw/`** — o dataset original, **nunca editado**. Se algum arquivo processado for
-corrompido, é daqui que se recomeça.
+**`data/raw/`** — o dataset original, **nunca editado** e não versionado (veja
+[Dataset](#dataset)). É opcional: só serve para regerar o recorte e as amostras.
+
+**`data/recorte_n10000.txt`** — o recorte de 10 mil vértices que faz o papel do grafo
+completo no protocolo (#59). Versionado, então todos os comandos deste README rodam sem
+baixar nada.
 
 **`data/samples/`** — os subgrafos de N = 100, 250, 500 e 1.000 gerados a partir do raw,
 um arquivo por semente e tamanho (`bfs_<semente>_n<N>.txt`). Ficam separados porque são
@@ -197,7 +202,8 @@ ilegível e leva dezenas de segundos para sair.
   medição de tempo e memória tem uma versão POSIX e uma versão Windows
   (`src/timer.c`, `src/memtrack.c`); veja [No Windows](#no-windows-mingw-w64) abaixo.
 - **Compilação:** `gcc` com suporte a C11 e `make` (no Windows, `mingw32-make`).
-- **Dataset** (opcional, só para o grafo completo): `curl`, `sha256sum` e `gunzip`.
+- **Dataset** (opcional, só para regerar o recorte e as amostras a partir do ego-Twitter
+  inteiro): `curl`, `sha256sum` e `gunzip`.
   As 12 amostras do protocolo já vêm no repositório.
 - **Opcional:** `valgrind`, para conferir vazamentos.
 - **Gráficos** (opcional, só para `scripts/graficos.py`): Python 3 com `matplotlib`.
@@ -237,9 +243,8 @@ make test                     # roda os testes; deve terminar com "0 falha(s)" e
 # primeira execução, sobre uma amostra versionada (não precisa do dataset)
 ./bin/grafos --input data/samples/bfs_307642294_n1000.txt --algo componentes
 
-# para usar o grafo completo, baixe o dataset (44 MB descompactado)
-./scripts/baixar_dataset.sh
-./bin/grafos --input data/raw/twitter_combined.txt
+# o recorte de 10 mil vértices, que faz o papel do grafo completo (também versionado)
+./bin/grafos --input data/recorte_n10000.txt
 ```
 
 A execução de `componentes` imprime algo como:
@@ -267,17 +272,20 @@ make clean
 A compilação usa `-std=c11 -Wall -Wextra -pedantic -Werror`: qualquer aviso interrompe o
 build. O código também deve rodar sem vazamentos sob `valgrind`.
 
-Um dos testes usa o dataset completo. Sem ele (veja [Dataset](#dataset)), esse teste
-aparece como pulado e os demais rodam normalmente.
+Os testes usam só arquivos versionados (o recorte e os grafos de `tests/grafos/`): rodam
+sem baixar nada, e nenhum é pulado.
 
 ## Uso
 
 ```bash
 # lê o arquivo e mostra um resumo (vértices, arestas, linhas descartadas)
-./bin/grafos --input data/raw/twitter_combined.txt
+./bin/grafos --input data/recorte_n10000.txt
 
-# gera as 12 amostras do protocolo experimental em data/samples
+# com o dataset inteiro baixado (veja Dataset): regera as 12 amostras do protocolo
+# e o recorte, idênticos aos versionados
 ./bin/grafos --input data/raw/twitter_combined.txt --amostrar data/samples
+./bin/grafos --input data/raw/twitter_combined.txt --recorte 10000 --source 307642294 \
+             --output data/recorte_n10000.txt
 ```
 
 | Opção | Descrição |
@@ -288,6 +296,7 @@ aparece como pulado e os demais rodam normalmente.
 | `--source` | Vértice de origem (ID original), para os algoritmos que precisam de um |
 | `--output` | Arquivo de saída dos resultados |
 | `--amostrar` | Pasta onde gravar as amostras: 3 sementes sorteadas × N = 100, 250, 500 e 1.000 |
+| `--recorte` | Grava em `--output` o subgrafo dos N primeiros vértices de um BFS sem sentido a partir de `--source` |
 | `--semente-rng` | Semente do sorteio das amostras. Padrão: `2026`, que gera os arquivos versionados |
 | `--execucao` | Número desta execução, gravado no log. A 1 é o aquecimento. Padrão: `1` |
 | `--log` | CSV onde cada execução de `--algo` acrescenta uma linha. Padrão: `results/execucoes.csv`, fora do git; a bateria usa `--log results/log.csv` |
@@ -312,13 +321,13 @@ por completo — uma amostra maior que o componente da semente.
 # a partir de 1.000 perfis sorteados; grava results/exemplos/separacao_histograma.csv e
 # results/exemplos/separacao_perfis.csv. Método e resultados versionados em
 # results/separacao.md
-./bin/grafos --input data/raw/twitter_combined.txt --algo separacao --output results/exemplos/separacao
+./bin/grafos --input data/recorte_n10000.txt --algo separacao --output results/exemplos/separacao
 ```
 
 ```bash
 # pontes e vértices de articulação, com o ranking por impacto de fragmentação: quantos
 # usuários perdem contato com o maior pedaço da rede sem cada articulação
-./bin/grafos --input data/raw/twitter_combined.txt --algo articulacao --output results/exemplos/articulacao.csv
+./bin/grafos --input data/recorte_n10000.txt --algo articulacao --output results/exemplos/articulacao.csv
 ```
 
 Cada algoritmo roda sobre a visão do grafo definida para ele:
@@ -396,7 +405,29 @@ de saída precisa existir: o programa não cria pastas.
 <https://snap.stanford.edu/data/ego-Twitter.html>
 
 Cada linha `A B` significa que o usuário A **segue** o usuário B. O grafo é, portanto,
-**direcionado**. O arquivo não é versionado (44 MB descompactado). Para obtê-lo:
+**direcionado**.
+
+### O recorte de 10 mil vértices (versionado)
+
+O grafo inteiro é pesado demais para rodar em qualquer máquina (a matriz de bits passa de
+800 MB). No protocolo, o papel de "grafo completo" fica com um recorte versionado em
+`data/recorte_n10000.txt` (#59):
+
+| Medida | Valor |
+|---|---|
+| Como foi gerado | os 10.000 primeiros vértices de um BFS sem sentido a partir de 307642294 (a primeira semente sorteada com `--semente-rng 2026`), com todas as arestas entre eles |
+| Vértices | 10.000 |
+| Arestas | 376.035 |
+| Densidade | 0,38%, abaixo do limiar de 1% em que a matriz de bits passa a ocupar menos que a lista |
+| Matriz de bits | 12,5 MB |
+
+Vértices e arestas foram conferidos por uma implementação independente em Python, que
+refaz o BFS sobre o arquivo original e compara as arestas uma a uma.
+
+### O dataset inteiro (opcional)
+
+Não é versionado (44 MB descompactado) e só é necessário para regerar o recorte e as
+amostras. Para obtê-lo:
 
 ```bash
 ./scripts/baixar_dataset.sh
@@ -404,7 +435,7 @@ Cada linha `A B` significa que o usuário A **segue** o usuário B. O grafo é, 
 
 O script baixa o arquivo para `data/raw/`, confere o SHA-256 e descompacta.
 
-Números medidos no arquivo:
+Números medidos no arquivo inteiro:
 
 | Medida | Valor |
 |---|---|
@@ -424,10 +455,9 @@ Três consequências para a implementação:
   e laços, senão graus e contagens saem inflados.
 - **Os IDs não servem como índice.** Vão até 568 milhões para apenas 81 mil vértices,
   por isso são remapeados para `0..V-1` por uma tabela hash.
-- **A matriz de adjacência não cabe no grafo completo.** São 81 mil × 81 mil células:
-  cerca de 6,6 GB a 1 byte por célula, ou 830 MB a 1 bit. A comparação lista × matriz é
-  feita nos recortes amostrados, e o limite no grafo completo é tratado como resultado
-  experimental.
+- **A matriz de adjacência fica pesada no grafo inteiro.** São 81 mil × 81 mil células:
+  cerca de 6,6 GB a 1 byte por célula, ou 830 MB a 1 bit. Por isso o protocolo usa o
+  recorte de 10 mil vértices, em que a matriz de bits ocupa 12,5 MB.
 
 Fonte para citação no artigo: J. McAuley e J. Leskovec. *Learning to Discover Social
 Circles in Ego Networks*. NIPS, 2012.
@@ -435,14 +465,13 @@ Circles in Ego Networks*. NIPS, 2012.
 ## Protocolo experimental
 
 O protocolo completo está na Metodologia do artigo. Em resumo: os seis algoritmos
-rodam sobre as 12 amostras (N = 100, 250, 500 e 1.000) e o grafo completo, nas duas
-representações, cada configuração 11 vezes seguidas; a primeira é o aquecimento e é
-descartada. BFS e DFS partem da semente da própria amostra e, no grafo completo, de
-cada uma das três sementes, o que dá 164 configurações.
+rodam sobre as 12 amostras (N = 100, 250, 500 e 1.000) e o recorte de 10 mil vértices,
+nas duas representações, cada configuração 11 vezes seguidas; a primeira é o aquecimento
+e é descartada. BFS e DFS partem da semente da própria instância (gravada no cabeçalho
+do arquivo), o que dá 156 configurações. Nada precisa ser baixado.
 
 ```bash
-./scripts/baixar_dataset.sh     # o grafo completo, se ainda não estiver em data/raw/
-./scripts/bateria.sh            # ~5 min; grava results/log.csv do zero
+./scripts/bateria.sh            # grava results/log.csv do zero
 python3 scripts/graficos.py     # results/figs/*.png e results/resumo.csv
 ```
 
@@ -458,7 +487,8 @@ python3 scripts/graficos.py     # results/figs/*.png e results/resumo.csv
 A bateria se recusa a rodar se `results/log.csv` já existir, para não misturar
 execuções; mova ou apague o log antes de refazê-la.
 
-O que a bateria versionada mostra:
+O que a bateria versionada mostra (ela ainda é a do grafo completo; será refeita com o
+recorte na #62):
 
 - Com lista, todos os algoritmos acompanham a reta O(V + E) do menor ao maior grafo.
 - Com a matriz de bits, o custo é V²/64 + E: nas amostras, o termo V²/64 é desprezível

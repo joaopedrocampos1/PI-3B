@@ -2,7 +2,7 @@
 #
 #   make            compila bin/grafos
 #   make test       compila e roda os testes de tests/
-#   make run ARGS="--input data/raw/twitter_combined.txt"
+#   make run ARGS="--input data/recorte_n10000.txt"
 #   make clean
 #
 # No Windows (MinGW-w64), troque `make` por `mingw32-make`. Funciona tanto
