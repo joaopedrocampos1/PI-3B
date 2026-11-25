@@ -55,6 +55,28 @@ typedef enum {
  * Em erro, `r` fica zerado e não precisa ser liberado. */
 CliqueStatus clique_exata(const Graph *g, double limite_ms, CliqueResultado *r);
 
+/*
+ * Heurística gulosa (#68): a resposta rápida para os grafos em que a busca
+ * exata não termina, e a base da comparação exata x heurística da Fase II.
+ *
+ * Os vértices são ordenados por grau decrescente (no empate, menor índice
+ * primeiro), e a busca parte de cada um dos `inicios` primeiros; com
+ * `inicios` = 0 ou maior que V, de todos. A partir de um início, a clique
+ * começa com ele e, a cada passo, recebe o candidato de maior grau (no
+ * empate, o de menor índice) entre os vizinhos de todos os vértices que já
+ * estão nela. Fica a maior clique entre todos os inícios; no empate, a
+ * primeira encontrada.
+ *
+ * A clique devolvida é sempre uma clique de verdade, mas não necessariamente
+ * a máxima: exato é sempre 0, e `nos` conta os vértices acrescentados em
+ * todos os inícios. Custo O(k · d²) consultas de aresta para k inícios de
+ * grau até d, além de ordenar os V vértices por grau.
+ *
+ * Mesmo resultado com lista e com matriz, e só nas visões sem sentido, como
+ * a exata. Em erro, `r` fica zerado e não precisa ser liberado.
+ */
+CliqueStatus clique_gulosa(const Graph *g, size_t inicios, CliqueResultado *r);
+
 void clique_liberar(CliqueResultado *r);   /* aceita resultado zerado */
 
 #endif
