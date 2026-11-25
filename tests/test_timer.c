@@ -30,6 +30,9 @@ static void gastar_cpu(double ms)
     while ((double)(clock() - inicio) * 1000.0 / CLOCKS_PER_SEC < ms)
         for (int i = 0; i < 10000; i++)
             soma += (unsigned long long)i;
+    /* O volatile já impede o compilador de apagar o laço, mas o gcc 16 ainda
+     * acusa "set but not used" (erro com -Werror). Ler a variável resolve. */
+    (void)soma;
 }
 
 /* O tempo medido nunca é negativo, nem logo depois de criar o timer. */
