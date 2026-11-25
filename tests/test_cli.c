@@ -53,7 +53,7 @@ static void so_entrada_usa_padroes(void)
     CHECK(op.pasta_amostras == NULL);
     CHECK(op.semente_rng == 2026ULL);
     CHECK(op.execucao == 1);
-    CHECK(op.log && strcmp(op.log, "results/log.csv") == 0);
+    CHECK(op.log && strcmp(op.log, "results/execucoes.csv") == 0);   /* fora do git (#60) */
 }
 
 static void execucao_e_log(void)
