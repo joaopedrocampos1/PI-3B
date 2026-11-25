@@ -15,6 +15,13 @@
  * como na lista. Custa O(V), desprezível perto dos O(V²) da matriz.
  *
  * Memória: O(V²) bits, alocada inteira em graph_create, mesmo sem arestas.
+ *
+ * Com peso (#64): a mesma matriz de bits e, ao lado dela, uma matriz de
+ * float, uma célula por par. Os bits continuam dizendo quais arestas
+ * existem, e por isso o percurso de vizinhos segue em O(V / 64 + grau) e
+ * nenhum valor de peso precisa ficar reservado para "sem aresta". A célula
+ * de um par sem aresta não é lida. O custo é de 32 bits por par, além do
+ * bit: no recorte de 10 mil vértices, 400 MB de pesos contra 12,5 MB de bits.
  */
 
 #define BITS_PALAVRA 64
@@ -136,4 +143,96 @@ const GraphOps GRAPH_MATRIX_OPS = {
     matriz_has,
     matriz_degree,
     matriz_next,
+    NULL,
+    NULL,
+    NULL,
+};
+
+/* ---- Matriz com peso (#64) ---- */
+
+typedef struct {
+    Matriz *bits;   /* a mesma matriz de bits da versão sem peso */
+    float *pesos;   /* n linhas de n células, contíguas: pesos[u * n + v] */
+} MatrizComPeso;
+
+static void *matriz_peso_create(size_t n)
+{
+    size_t celulas = n ? n : 1;
+    if (celulas > SIZE_MAX / sizeof(float) / celulas)   /* n * n floats estouraria */
+        return NULL;
+    MatrizComPeso *mp = mt_malloc(sizeof *mp);
+    if (!mp)
+        return NULL;
+    mp->bits = matriz_create(n);
+    mp->pesos = mt_malloc(celulas * celulas * sizeof *mp->pesos);
+    if (!mp->bits || !mp->pesos) {
+        if (mp->bits)
+            matriz_destroy(mp->bits, n);
+        mt_free(mp->pesos);
+        mt_free(mp);
+        return NULL;
+    }
+    return mp;
+}
+
+static void matriz_peso_destroy(void *data, size_t n)
+{
+    MatrizComPeso *mp = data;
+    matriz_destroy(mp->bits, n);
+    mt_free(mp->pesos);
+    mt_free(mp);
+}
+
+static int matriz_peso_add_weighted(void *data, size_t n, size_t u, size_t v, float peso)
+{
+    MatrizComPeso *mp = data;
+    mp->pesos[u * n + v] = peso;
+    return matriz_add(mp->bits, n, u, v);
+}
+
+static int matriz_peso_add(void *data, size_t n, size_t u, size_t v)
+{
+    return matriz_peso_add_weighted(data, n, u, v, 1.0f);
+}
+
+static int matriz_peso_has(const void *data, size_t n, size_t u, size_t v)
+{
+    return matriz_has(((const MatrizComPeso *)data)->bits, n, u, v);
+}
+
+static size_t matriz_peso_degree(const void *data, size_t n, size_t v)
+{
+    return matriz_degree(((const MatrizComPeso *)data)->bits, n, v);
+}
+
+static int matriz_peso_next(const void *data, size_t n, size_t v, size_t *pos, size_t *w)
+{
+    return matriz_next(((const MatrizComPeso *)data)->bits, n, v, pos, w);
+}
+
+static float matriz_peso_weight(const void *data, size_t n, size_t u, size_t v)
+{
+    return ((const MatrizComPeso *)data)->pesos[u * n + v];
+}
+
+static int matriz_peso_next_weighted(const void *data, size_t n, size_t v, size_t *pos,
+                                     size_t *w, float *peso)
+{
+    const MatrizComPeso *mp = data;
+    if (!matriz_next(mp->bits, n, v, pos, w))
+        return 0;
+    *peso = mp->pesos[v * n + *w];
+    return 1;
+}
+
+const GraphOps GRAPH_MATRIX_WEIGHTED_OPS = {
+    matriz_peso_create,
+    matriz_peso_destroy,
+    matriz_peso_add,
+    matriz_peso_has,
+    matriz_peso_degree,
+    matriz_peso_next,
+    matriz_peso_add_weighted,
+    matriz_peso_weight,
+    matriz_peso_next_weighted,
 };

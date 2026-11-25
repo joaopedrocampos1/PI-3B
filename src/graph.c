@@ -10,15 +10,21 @@ static const GraphOps *const REPRESENTACOES[] = {
     [GRAPH_MATRIX] = &GRAPH_MATRIX_OPS,
 };
 
+/* As mesmas, guardando um peso por aresta (#64). */
+static const GraphOps *const REPRESENTACOES_COM_PESO[] = {
+    [GRAPH_LIST] = &GRAPH_LIST_WEIGHTED_OPS,
+    [GRAPH_MATRIX] = &GRAPH_MATRIX_WEIGHTED_OPS,
+};
+
 static int sem_sentido(GraphView view)
 {
     return view != GRAPH_DIRECTED;
 }
 
-GraphStatus graph_create(size_t n, GraphRep rep, GraphView view, Graph **out)
+static GraphStatus criar(const GraphOps *ops, size_t n, GraphRep rep, GraphView view,
+                         Graph **out)
 {
     *out = NULL;
-    const GraphOps *ops = REPRESENTACOES[rep];
     if (!ops)
         return GRAPH_ERR_UNAVAILABLE;
 
@@ -39,6 +45,21 @@ GraphStatus graph_create(size_t n, GraphRep rep, GraphView view, Graph **out)
     return GRAPH_OK;
 }
 
+GraphStatus graph_create(size_t n, GraphRep rep, GraphView view, Graph **out)
+{
+    return criar(REPRESENTACOES[rep], n, rep, view, out);
+}
+
+GraphStatus graph_create_weighted(size_t n, GraphRep rep, GraphView view, Graph **out)
+{
+    return criar(REPRESENTACOES_COM_PESO[rep], n, rep, view, out);
+}
+
+int graph_is_weighted(const Graph *g)
+{
+    return g->ops->add_weighted != NULL;
+}
+
 void graph_destroy(Graph *g)
 {
     if (!g)
@@ -49,6 +70,8 @@ void graph_destroy(Graph *g)
 
 GraphStatus graph_add_edge(Graph *g, size_t u, size_t v)
 {
+    if (graph_is_weighted(g))
+        return graph_add_weighted_edge(g, u, v, 1.0f);
     if (u == v)
         return GRAPH_OK;
 
@@ -56,6 +79,25 @@ GraphStatus graph_add_edge(Graph *g, size_t u, size_t v)
     if (r < 0)
         return GRAPH_ERR_MEMORY;
     if (sem_sentido(g->view) && g->ops->add(g->data, g->n, v, u) < 0)
+        return GRAPH_ERR_MEMORY;
+    if (r == 1)
+        g->m++;
+    return GRAPH_OK;
+}
+
+GraphStatus graph_add_weighted_edge(Graph *g, size_t u, size_t v, float peso)
+{
+    if (!graph_is_weighted(g))
+        return GRAPH_ERR_NOT_WEIGHTED;
+    if (!isfinite(peso))
+        return GRAPH_ERR_INVALID_WEIGHT;
+    if (u == v)
+        return GRAPH_OK;
+
+    int r = g->ops->add_weighted(g->data, g->n, u, v, peso);
+    if (r < 0)
+        return GRAPH_ERR_MEMORY;
+    if (sem_sentido(g->view) && g->ops->add_weighted(g->data, g->n, v, u, peso) < 0)
         return GRAPH_ERR_MEMORY;
     if (r == 1)
         g->m++;
@@ -116,6 +158,13 @@ int graph_has_edge(const Graph *g, size_t u, size_t v)
     return g->ops->has(g->data, g->n, u, v);
 }
 
+float graph_edge_weight(const Graph *g, size_t u, size_t v)
+{
+    if (!graph_has_edge(g, u, v))
+        return INFINITY;
+    return g->ops->weight ? g->ops->weight(g->data, g->n, u, v) : 1.0f;
+}
+
 size_t graph_degree(const Graph *g, size_t v)
 {
     return g->ops->degree(g->data, g->n, v);
@@ -136,6 +185,15 @@ void graph_neighbors_begin(const Graph *g, size_t v, GraphIter *it)
 int graph_neighbors_next(GraphIter *it, size_t *w)
 {
     const Graph *g = it->g;
+    return g->ops->next(g->data, g->n, it->v, &it->pos, w);
+}
+
+int graph_neighbors_next_weighted(GraphIter *it, size_t *w, float *peso)
+{
+    const Graph *g = it->g;
+    if (g->ops->next_weighted)
+        return g->ops->next_weighted(g->data, g->n, it->v, &it->pos, w, peso);
+    *peso = 1.0f;
     return g->ops->next(g->data, g->n, it->v, &it->pos, w);
 }
 

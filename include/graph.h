@@ -33,7 +33,17 @@
  * representações. É isso que garante resultado idêntico com lista e matriz (#12).
  *
  * Toda a memória passa pelo memtrack (RF03).
+ *
+ * Arestas com peso (Fase II, #64): um grafo criado com graph_create_weighted
+ * guarda um peso float por aresta; um criado com graph_create/graph_build não
+ * guarda peso nenhum e ocupa exatamente o mesmo que na Fase I. Para os
+ * algoritmos, o grafo sem peso responde como se todo peso fosse 1. Na matriz,
+ * o peso custa um float por par de vértices (cerca de 400 MB no recorte de
+ * 10 mil vértices, contra 12,5 MB da matriz de bits): é o preço da matriz
+ * numa rede esparsa, e é parte da comparação lista x matriz da Fase II.
  */
+
+#include <math.h>   /* INFINITY, devolvido por graph_edge_weight */
 
 typedef enum {
     GRAPH_LIST,
@@ -49,7 +59,9 @@ typedef enum {
 typedef enum {
     GRAPH_OK = 0,
     GRAPH_ERR_MEMORY,
-    GRAPH_ERR_UNAVAILABLE   /* representação ainda não implementada */
+    GRAPH_ERR_UNAVAILABLE,    /* representação ainda não implementada */
+    GRAPH_ERR_NOT_WEIGHTED,   /* aresta com peso num grafo criado sem peso */
+    GRAPH_ERR_INVALID_WEIGHT  /* peso NaN ou infinito */
 } GraphStatus;
 
 typedef struct Graph Graph;   /* opaco: os campos ficam em graph_internal.h */
@@ -65,6 +77,12 @@ typedef struct {
 
 /* Grafo vazio com `n` vértices e nenhuma aresta. Em erro, *out fica NULL. */
 GraphStatus graph_create(size_t n, GraphRep rep, GraphView view, Graph **out);
+
+/* Como graph_create, mas o grafo guarda um peso por aresta (#64). */
+GraphStatus graph_create_weighted(size_t n, GraphRep rep, GraphView view, Graph **out);
+
+/* 1 se o grafo foi criado com peso, 0 caso contrário. */
+int graph_is_weighted(const Graph *g);
 
 /* Constrói a visão `view` a partir das arestas lidas.
  *
@@ -84,6 +102,20 @@ void graph_destroy(Graph *g);   /* aceita NULL */
  * Em GRAPH_ERR_MEMORY o grafo pode ficar com só um dos sentidos de {u, v}:
  * deve ser destruído. */
 GraphStatus graph_add_edge(Graph *g, size_t u, size_t v);
+
+/* Insere u -> v (ou {u, v}) com peso `peso`, num grafo criado com peso.
+ * Diferente de graph_add_edge, inserir de novo uma aresta presente troca o
+ * peso dela (nas visões sem sentido, nas duas pontas), sem contar outra
+ * aresta. Laços são ignorados. graph_add_edge num grafo com peso insere
+ * com peso 1.
+ * Erros, sem alterar o grafo: GRAPH_ERR_NOT_WEIGHTED se o grafo foi criado
+ * sem peso, GRAPH_ERR_INVALID_WEIGHT se o peso for NaN ou infinito. Pesos
+ * negativos são aceitos aqui; quem não os admite (o Dijkstra) os recusa. */
+GraphStatus graph_add_weighted_edge(Graph *g, size_t u, size_t v, float peso);
+
+/* Peso de u -> v (ou {u, v}); INFINITY se a aresta não existe. Num grafo
+ * sem peso, 1 para toda aresta presente. */
+float graph_edge_weight(const Graph *g, size_t u, size_t v);
 
 /* 1 se existe u -> v (ou {u, v}), 0 caso contrário. */
 int graph_has_edge(const Graph *g, size_t u, size_t v);
@@ -106,6 +138,10 @@ GraphView graph_view(const Graph *g);
  * O grafo não pode ser alterado durante o percurso. */
 void graph_neighbors_begin(const Graph *g, size_t v, GraphIter *it);
 int  graph_neighbors_next(GraphIter *it, size_t *w);
+
+/* Como graph_neighbors_next, e devolve também o peso da aresta até *w
+ * (1 num grafo sem peso). Os dois podem ser misturados no mesmo percurso. */
+int  graph_neighbors_next_weighted(GraphIter *it, size_t *w, float *peso);
 
 /* "lista" / "matriz" e "direcionada" / "simetrizada" / "reciproca", para
  * mensagens e para o log. */
