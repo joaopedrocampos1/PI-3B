@@ -191,9 +191,10 @@ ilegível e leva dezenas de segundos para sair.
 
 ### Pré-requisitos
 
-- **Sistema:** Linux, macOS ou WSL no Windows. O programa usa chamadas POSIX
-  (`clock_gettime`) e não compila nativamente no Windows (MinGW/MSVC).
-- **Compilação:** `gcc` com suporte a C11 e `make`.
+- **Sistema:** Linux, macOS ou Windows (nativo com MinGW-w64, ou pelo WSL). A
+  medição de tempo e memória tem uma versão POSIX e uma versão Windows
+  (`src/timer.c`, `src/memtrack.c`); veja [No Windows](#no-windows-mingw-w64) abaixo.
+- **Compilação:** `gcc` com suporte a C11 e `make` (no Windows, `mingw32-make`).
 - **Dataset** (opcional, só para o grafo completo): `curl`, `sha256sum` e `gunzip`.
   As 12 amostras do protocolo já vêm no repositório.
 - **Opcional:** `valgrind`, para conferir vazamentos.
@@ -205,6 +206,22 @@ No Ubuntu/Debian (inclusive no WSL), tudo isso se instala com:
 ```bash
 sudo apt install build-essential curl valgrind python3-matplotlib graphviz
 ```
+
+### No Windows (MinGW-w64)
+
+Instale o gcc do MinGW-w64 (por exemplo, `winget install BrechtSanders.WinLibs.POSIX.UCRT`,
+que traz o `gcc` e o `mingw32-make`) e rode, no PowerShell, no cmd ou no Git Bash:
+
+```powershell
+mingw32-make                  # compila bin\grafos.exe
+mingw32-make test             # roda os testes; deve terminar com "0 falha(s)" em todos
+.\bin\grafos.exe --input data/samples/bfs_307642294_n1000.txt --algo componentes
+```
+
+O Makefile percebe sozinho se está no cmd/PowerShell ou num shell POSIX e ajusta os
+comandos (`mkdir`, `del`/`rm`, `.exe`, `-lpsapi`). Testado com o gcc 16.1 (WinLibs, UCRT)
+no Windows 11. Os scripts de `scripts/*.sh` (baixar o dataset, gerar desenhos) são de
+shell POSIX: rode-os no Git Bash ou no WSL.
 
 ### Passo a passo
 
