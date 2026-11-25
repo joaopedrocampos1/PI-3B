@@ -161,7 +161,7 @@ def figura_memoria(resumo):
     for (algo, est, n), r in resumo.items():
         por_n[n][est].append(r["memoria_kb"])
     ns = sorted(por_n)
-    rotulos = [f"{n:,}".replace(",", ".") if n <= 1000 else f"completo\n({n:,})".replace(",", ".")
+    rotulos = [f"{n:,}".replace(",", ".") if n <= 1000 else f"recorte\n({n:,})".replace(",", ".")
                for n in ns]
 
     fig, ax = plt.subplots(figsize=(6.4, 3.6), constrained_layout=True)

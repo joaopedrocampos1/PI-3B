@@ -50,6 +50,50 @@ static void resumir(const char *caminho, const EdgeList *el, size_t v)
                el->malformadas, el->primeira_malformada);
 }
 
+/* Grava em `caminho` o subgrafo dos `n` primeiros vértices de um BFS sem
+ * sentido a partir de `semente`, com a origem do arquivo no comentário.
+ * `semente_rng` vai para o comentário quando a semente foi sorteada; NULL
+ * quando ela foi escolhida (--recorte). Devolve o código de saída: 0, 1 em
+ * erro, 2 se a semente alcança menos de `n` vértices. */
+static int gravar_amostra(const Amostrador *a, const Opcoes *op, unsigned long long semente,
+                          size_t n, const unsigned long long *semente_rng, const char *caminho)
+{
+    EdgeList sub;
+    AmostraStatus st = subgraph_bfs(a, semente, n, &sub);
+    if (st == AMOSTRA_SEMENTE_INEXISTENTE) {
+        fprintf(stderr, "erro: a semente %llu não é vértice do grafo\n", semente);
+        return 1;
+    }
+    if (st == AMOSTRA_COMPONENTE_PEQUENO) {
+        fprintf(stderr, "aviso: a semente %llu alcança menos de %zu vértices; amostra pulada\n",
+                semente, n);
+        return 2;
+    }
+    if (st != AMOSTRA_OK) {
+        fprintf(stderr, "erro: memória insuficiente para gerar a amostra\n");
+        return 1;
+    }
+
+    char rng[64] = "";
+    if (semente_rng)
+        snprintf(rng, sizeof rng, "semente-rng: %llu\n", *semente_rng);
+    char comentario[1024];
+    snprintf(comentario, sizeof comentario,
+             "subgrafo induzido pelos %zu primeiros vértices de um BFS sem sentido\n"
+             "dataset: %s\n%ssemente: %llu\nN: %zu\narestas: %zu",
+             n, op->entrada, rng, semente, n, sub.n);
+
+    int codigo = 0;
+    if (edgelist_gravar(caminho, &sub, comentario) != EDGELIST_OK) {
+        fprintf(stderr, "erro: não foi possível gravar '%s' (a pasta existe?)\n", caminho);
+        codigo = 1;
+    } else {
+        printf("%s: %zu vértices, %zu arestas\n", caminho, n, sub.n);
+    }
+    edgelist_liberar(&sub);
+    return codigo;
+}
+
 /* Grava em op->pasta_amostras um arquivo por semente e tamanho. Devolve o
  * código de saída do programa. */
 static int gerar_amostras(const EdgeList *el, const Opcoes *op)
@@ -72,42 +116,36 @@ static int gerar_amostras(const EdgeList *el, const Opcoes *op)
 
     int codigo = 0;
     for (size_t s = 0; s < NUM_SEMENTES && codigo != 1; s++) {
-        for (size_t t = 0; t < NUM_TAMANHOS; t++) {
-            size_t n = TAMANHOS[t];
-            EdgeList sub;
-            st = subgraph_bfs(&a, sementes[s], n, &sub);
-            if (st == AMOSTRA_COMPONENTE_PEQUENO) {
-                fprintf(stderr, "aviso: a semente %llu alcança menos de %zu vértices; amostra pulada\n",
-                        sementes[s], n);
-                codigo = 2;
-                continue;
-            }
-            if (st != AMOSTRA_OK) {
-                fprintf(stderr, "erro: memória insuficiente para gerar a amostra\n");
+        for (size_t t = 0; t < NUM_TAMANHOS && codigo != 1; t++) {
+            char caminho[1024];
+            int c = snprintf(caminho, sizeof caminho, "%s/bfs_%llu_n%zu.txt",
+                             op->pasta_amostras, sementes[s], TAMANHOS[t]);
+            if (c < 0 || (size_t)c >= sizeof caminho) {
+                fprintf(stderr, "erro: caminho longo demais em '%s'\n", op->pasta_amostras);
                 codigo = 1;
                 break;
             }
-
-            char caminho[1024], comentario[1024];
-            int c1 = snprintf(caminho, sizeof caminho, "%s/bfs_%llu_n%zu.txt",
-                              op->pasta_amostras, sementes[s], n);
-            snprintf(comentario, sizeof comentario,
-                     "subgrafo induzido pelos %zu primeiros vértices de um BFS sem sentido\n"
-                     "dataset: %s\nsemente-rng: %llu\nsemente: %llu\nN: %zu\narestas: %zu",
-                     n, op->entrada, op->semente_rng, sementes[s], n, sub.n);
-
-            if (c1 < 0 || (size_t)c1 >= sizeof caminho ||
-                edgelist_gravar(caminho, &sub, comentario) != EDGELIST_OK) {
-                fprintf(stderr, "erro: não foi possível gravar '%s' (a pasta existe?)\n", caminho);
-                edgelist_liberar(&sub);
-                codigo = 1;
-                break;
-            }
-            printf("%s: %zu vértices, %zu arestas\n", caminho, n, sub.n);
-            edgelist_liberar(&sub);
+            int r = gravar_amostra(&a, op, sementes[s], TAMANHOS[t], &op->semente_rng, caminho);
+            if (r != 0)
+                codigo = r;
         }
     }
 
+    subgraph_liberar(&a);
+    return codigo;
+}
+
+/* --recorte (#59): um único subgrafo de op->recorte vértices, a partir da
+ * semente escolhida em --source, gravado em --output. É assim que se gera o
+ * recorte versionado que substitui o grafo completo no protocolo. */
+static int gerar_recorte(const EdgeList *el, const Opcoes *op)
+{
+    Amostrador a;
+    if (subgraph_preparar(&a, el) != AMOSTRA_OK) {
+        fprintf(stderr, "erro: memória insuficiente para preparar a amostragem\n");
+        return 1;
+    }
+    int codigo = gravar_amostra(&a, op, op->origem, op->recorte, NULL, op->saida);
     subgraph_liberar(&a);
     return codigo;
 }
@@ -988,6 +1026,8 @@ int main(int argc, char **argv)
     int codigo = 0;
     if (op.pasta_amostras) {
         codigo = gerar_amostras(&el, &op);
+    } else if (op.recorte) {
+        codigo = gerar_recorte(&el, &op);
     } else if (op.algoritmo == ALGO_BFS) {
         codigo = executar_bfs(&el, &op);
     } else if (op.algoritmo == ALGO_SEPARACAO) {
