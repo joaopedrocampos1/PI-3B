@@ -5,8 +5,8 @@
  *   gcc -std=c11 -Wall -Wextra -Iinclude src/idmap.c src/edgelist.c tests/test_idmap.c -o bin/test_idmap
  *   ./bin/test_idmap
  *
- * O teste com o dataset real exige data/raw/twitter_combined.txt
- * (scripts/baixar_dataset.sh); sem o arquivo, ele é pulado.
+ * O teste com dados reais usa o recorte versionado de 10 mil vértices
+ * (data/recorte_n10000.txt, #59): roda sem baixar nada.
  */
 #include "edgelist.h"
 #include "memtrack.h"
@@ -15,7 +15,8 @@
 #include <limits.h>
 #include <stdio.h>
 
-#define DATASET "data/raw/twitter_combined.txt"
+#define DATASET  "data/recorte_n10000.txt"
+#define MAIOR_ID 567262610ULL   /* maior ID do recorte */
 
 static int falhas = 0;
 static int verificacoes = 0;
@@ -113,16 +114,21 @@ static void ids_nos_extremos(void)
     idmap_liberar(&m);
 }
 
-/* Critério de aceite da issue #7: mapear todos os usuários do dataset real.
- * Valores esperados vêm da análise independente feita na escolha do dataset
- * (#4) e da validação do parser (#6). Pulado se o arquivo não foi baixado. */
-static void dataset_twitter_completo(void)
+/* Critério de aceite da issue #7: mapear todos os usuários de dados reais.
+ * Desde a #59, a instância real do protocolo é o recorte de 10 mil vértices;
+ * os valores esperados vêm da contagem independente feita ao gerá-lo. O
+ * arquivo é versionado, então a falta dele é falha, e não teste pulado. */
+static void dataset_recorte(void)
 {
     EdgeList el;
     if (edgelist_ler(DATASET, &el) != EDGELIST_OK) {
-        printf("  (pulado: %s ausente; rode scripts/baixar_dataset.sh)\n", DATASET);
+        verificacoes++;
+        falhas++;
+        fprintf(stderr, "  FALHOU: não foi possível ler %s (rode a partir da raiz do repositório)\n",
+                DATASET);
         return;
     }
+    CHECK(el.n == 376035);
 
     IdMap m;
     idmap_iniciar(&m);
@@ -133,12 +139,12 @@ static void dataset_twitter_completo(void)
                 && idmap_inserir(&m, el.arestas[e].destino, &i);
     }
     CHECK(ok);
-    CHECK(m.n == 81306);
+    CHECK(m.n == 10000);
 
     size_t i;
     CHECK(idmap_buscar(&m, 12, &i) && i == 0);   /* primeira aresta: 12 -> 13 */
     CHECK(idmap_buscar(&m, 13, &i) && i == 1);
-    CHECK(idmap_buscar(&m, 568770231ULL, &i));   /* maior ID do arquivo */
+    CHECK(idmap_buscar(&m, MAIOR_ID, &i));        /* maior ID do arquivo */
 
     /* nenhum índice compartilhado: cada um volta para o próprio ID */
     int ida_e_volta = 1;
@@ -168,7 +174,7 @@ static void memoria_medida_pelo_memtrack(void)
 int main(void)
 {
     memoria_medida_pelo_memtrack();
-    dataset_twitter_completo();
+    dataset_recorte();
     ids_nos_extremos();
     buscar_nao_insere();
     indices_seguem_ordem_de_chegada();
