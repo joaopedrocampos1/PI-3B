@@ -2,13 +2,14 @@
 # Bateria de testes de estresse (#27), seguindo o protocolo da Metodologia do
 # artigo (#26):
 #
-#   13 instâncias (as 12 amostras de data/samples e o grafo completo)
+#   13 instâncias (as 12 amostras de data/samples e o recorte de 10 mil
+#   vértices, data/recorte_n10000.txt, que substitui o grafo completo: #59)
 #   x 2 representações (lista e matriz)
 #   x 6 algoritmos (bfs, dfs, componentes, ciclos, bipartido, articulacao),
 #   cada configuração executada 11 vezes seguidas; a 1ª é o aquecimento.
 #
-# BFS e DFS partem da semente da própria amostra; no grafo completo, de cada
-# uma das três sementes. Cada execução acrescenta uma linha a results/log.csv
+# BFS e DFS partem da semente da própria instância, lida do cabeçalho do
+# arquivo ("# semente: ..."); o recorte é tratado como as amostras. Cada execução acrescenta uma linha a results/log.csv
 # (componentes acrescenta duas: fortes e fracos). Uma configuração que falha,
 # como a matriz sem memória, é registrada em results/inviaveis.csv e a bateria
 # segue: o protocolo trata esse limite como resultado.
@@ -23,8 +24,7 @@
 set -u
 cd "$(dirname "$0")/.." || exit 1
 
-COMPLETO=data/raw/twitter_combined.txt
-SEMENTES="307642294 144319796 9487272"   # sorteadas com --semente-rng 2026
+RECORTE=data/recorte_n10000.txt
 ALGORITMOS="bfs dfs componentes ciclos bipartido articulacao"
 ESTRUTURAS="lista matriz"
 
@@ -32,7 +32,7 @@ REPETICOES=${REPETICOES:-11}
 LOG=${LOG:-results/log.csv}
 INVIAVEIS=${INVIAVEIS:-results/inviaveis.csv}
 MAQUINA=${MAQUINA:-results/maquina.txt}
-INSTANCIAS=${INSTANCIAS:-"$(ls data/samples/bfs_*.txt) $COMPLETO"}
+INSTANCIAS=${INSTANCIAS:-"$(ls data/samples/bfs_*.txt) $RECORTE"}
 
 if [ -s "$LOG" ]; then
     echo "erro: $LOG já existe. A bateria grava um log limpo; mova ou apague o atual antes." >&2
@@ -40,7 +40,7 @@ if [ -s "$LOG" ]; then
 fi
 for f in $INSTANCIAS; do
     if [ ! -f "$f" ]; then
-        echo "erro: $f não existe (o grafo completo vem de scripts/baixar_dataset.sh)" >&2
+        echo "erro: $f não existe" >&2
         exit 1
     fi
 done
@@ -60,12 +60,10 @@ make -s bin/grafos || exit 1
 
 [ -s "$INVIAVEIS" ] || echo "dataset,estrutura,algoritmo,origem,codigo" > "$INVIAVEIS"
 
-# A semente de uma amostra está no nome: bfs_<semente>_n<N>.txt
+# A semente de cada instância está no cabeçalho gravado por --amostrar e
+# --recorte: "# semente: <id>"
 origens_de() {
-    case "$1" in
-        *bfs_*_n*) basename "$1" | sed 's/^bfs_\([0-9]*\)_n.*/\1/' ;;
-        *) echo "$SEMENTES" ;;
-    esac
+    sed -n 's/^# semente: *\([0-9]*\).*/\1/p' "$1"
 }
 
 # Lista as configurações, uma por linha: instância estrutura algoritmo origem
