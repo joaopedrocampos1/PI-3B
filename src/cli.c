@@ -4,6 +4,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <limits.h>
+#include <stdint.h>
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
@@ -21,7 +22,7 @@ static const char *NOMES_ALGORITMO[] = {
 #define NUM_ALGORITMOS (sizeof NOMES_ALGORITMO / sizeof NOMES_ALGORITMO[0])
 
 typedef enum { OP_INPUT, OP_STRUCT, OP_ALGO, OP_SOURCE, OP_OUTPUT, OP_AMOSTRAR, OP_SEMENTE_RNG,
-               OP_EXECUCAO, OP_LOG, OP_DOT } Opcao;
+               OP_EXECUCAO, OP_LOG, OP_DOT, OP_RECORTE } Opcao;
 
 static const struct {
     const char *nome;
@@ -30,7 +31,7 @@ static const struct {
     {"input", OP_INPUT},   {"struct", OP_STRUCT},     {"algo", OP_ALGO},
     {"source", OP_SOURCE}, {"output", OP_OUTPUT},     {"amostrar", OP_AMOSTRAR},
     {"semente-rng", OP_SEMENTE_RNG}, {"execucao", OP_EXECUCAO}, {"log", OP_LOG},
-    {"dot", OP_DOT},
+    {"dot", OP_DOT},       {"recorte", OP_RECORTE},
 };
 #define NUM_OPCOES (sizeof OPCOES / sizeof OPCOES[0])
 
@@ -98,6 +99,13 @@ static CliStatus aplicar(Opcoes *op, Opcao id, const char *valor, char *erro, si
             return falhar(erro, tam, "--semente-rng precisa ser um inteiro não negativo, não '%s'",
                           valor);
         break;
+    case OP_RECORTE: {
+        unsigned long long n;
+        if (!ler_numero(valor, &n) || n == 0 || n > SIZE_MAX)
+            return falhar(erro, tam, "--recorte precisa ser um inteiro positivo, não '%s'", valor);
+        op->recorte = (size_t)n;
+        break;
+    }
     case OP_EXECUCAO: {
         unsigned long long n;
         if (!ler_numero(valor, &n) || n == 0 || n > UINT_MAX)
@@ -153,6 +161,14 @@ CliStatus cli_ler(int argc, char **argv, Opcoes *op, char *erro, size_t tam_erro
         return falhar(erro, tam_erro, "--amostrar não pode ser usado junto com --algo");
     if (op->pasta_amostras && op->dot)
         return falhar(erro, tam_erro, "--dot não pode ser usado junto com --amostrar");
+    if (op->recorte) {
+        if (op->algoritmo != ALGO_NENHUM || op->pasta_amostras || op->dot)
+            return falhar(erro, tam_erro,
+                          "--recorte não pode ser usado junto com --algo, --amostrar ou --dot");
+        if (!op->tem_origem || !op->saida)
+            return falhar(erro, tam_erro,
+                          "--recorte precisa de --source (a semente) e de --output (o arquivo)");
+    }
     return CLI_OK;
 }
 
@@ -170,6 +186,8 @@ void cli_uso(FILE *f, const char *programa)
             "                         dos CSVs (<prefixo>_histograma.csv e _perfis.csv)\n"
             "  --amostrar <pasta>     grava as amostras por BFS (3 sementes x N = 100, 250,\n"
             "                         500 e 1.000) em <pasta>\n"
+            "  --recorte <N>          grava em --output o subgrafo induzido pelos N primeiros\n"
+            "                         vértices de um BFS sem sentido a partir de --source\n"
             "  --semente-rng <n>      semente dos sorteios: amostras e perfis da separacao\n"
             "                         (padrão: %llu)\n"
             "  --execucao <n>         número desta execução, gravado no log; a 1 é o\n"
@@ -181,11 +199,11 @@ void cli_uso(FILE *f, const char *programa)
             "  --help                 mostra esta ajuda\n"
             "\n"
             "Toda opção aceita também a forma --opcao=valor.\n"
-            "Sem --algo nem --amostrar, só lê o arquivo e mostra um resumo.\n"
+            "Sem --algo, --amostrar nem --recorte, só lê o arquivo e mostra um resumo.\n"
             "\n"
             "exemplos:\n"
-            "  %s --input data/raw/twitter_combined.txt\n"
-            "  %s --input data/raw/twitter_combined.txt --amostrar data/samples\n",
+            "  %s --input data/recorte_n10000.txt\n"
+            "  %s --input data/recorte_n10000.txt --algo componentes --struct matriz\n",
             programa, CLI_SEMENTE_RNG_PADRAO, LOG_CAMINHO_PADRAO, programa, programa);
 }
 

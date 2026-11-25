@@ -96,6 +96,19 @@ static void modo_amostragem(void)
     CHECK(op.semente_rng == 7);
 }
 
+/* --recorte (#59): N vértices a partir de --source, gravados em --output. */
+static void modo_recorte(void)
+{
+    Opcoes op;
+    CHECK(ler(&op, "--input", "d.txt", NULL) == CLI_OK);
+    CHECK(op.recorte == 0);
+    CHECK(ler(&op, "--input", "d.txt", "--recorte", "10000", "--source", "307642294",
+              "--output", "data/r.txt", NULL) == CLI_OK);
+    CHECK(op.recorte == 10000);
+    CHECK(op.tem_origem && op.origem == 307642294ULL);
+    CHECK(op.saida && strcmp(op.saida, "data/r.txt") == 0);
+}
+
 /* Todos os nomes de algoritmo aceitos, ida e volta. */
 static void nomes_de_algoritmo(void)
 {
@@ -152,6 +165,12 @@ static void argumentos_invalidos(void)
         {{"-input", "d", NULL}, "-input"},
         {{"--input", "d", "--amostrar", "p", "--algo", "bfs", NULL}, "--amostrar"},
         {{"--input", "d", "--amostrar", "p", "--dot", "g.dot", NULL}, "--dot"},
+        {{"--input", "d", "--recorte", "0", NULL}, "--recorte"},
+        {{"--input", "d", "--recorte", "mil", NULL}, "--recorte"},
+        {{"--input", "d", "--recorte", "10", "--output", "r.txt", NULL}, "--source"},
+        {{"--input", "d", "--recorte", "10", "--source", "1", NULL}, "--output"},
+        {{"--input", "d", "--recorte", "10", "--algo", "bfs", NULL}, "--recorte"},
+        {{"--input", "d", "--recorte", "10", "--amostrar", "p", NULL}, "--recorte"},
     };
 
     for (size_t i = 0; i < sizeof casos / sizeof casos[0]; i++) {
@@ -201,6 +220,7 @@ int main(void)
     todas_as_opcoes_separadas();
     todas_as_opcoes_com_igual();
     modo_amostragem();
+    modo_recorte();
     nomes_de_algoritmo();
     repetida_vale_a_ultima();
 
